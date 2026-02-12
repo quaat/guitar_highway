@@ -25,6 +25,10 @@ export interface HighwayConfig {
   viewDistance: number;
   laneWidth: number;   // Visual width of the highway
   laneHeight: number;  // Visual height of the highway
+  stringGlowDistance?: number;
+  laneGlowDistance?: number;
+  maxStringGlowIntensity?: number;
+  maxLaneGlowIntensity?: number;
 }
 
 export interface CameraConfig {

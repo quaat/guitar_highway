@@ -23,7 +23,8 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
   const materialRef = useRef<MeshStandardMaterial>(null);
   const previewMeshRef = useRef<Mesh>(null);
   const previewMaterialRef = useRef<MeshStandardMaterial>(null);
-  
+  const rodRef = useRef<Mesh>(null);
+
   const color = useMemo(() => STRING_COLORS_MAP[note.string] || '#fff', [note.string]);
 
   // Reuse Vector3 to avoid GC; this keeps preview aligned with lane mapping at impact.
@@ -39,10 +40,10 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     // We could optimize by only calculating Z, but the mapping function is cheap.
     // Let's manually do Z for perf:
     // const z = -(note.time - playheadRef.current) * config.speed;
-    
+
     // Using the shared domain function ensures consistency
     const targetPos = worldPositionForEvent(note, playheadRef.current, config);
-    
+
     meshRef.current.position.copy(targetPos);
 
     if (previewMeshRef.current) {
@@ -75,6 +76,14 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     const visible = dist < 0.6 && dist > -(config.viewDistance + 20);
     meshRef.current.visible = visible;
 
+    if (rodRef.current) {
+      const highwaySurfaceY = -(config.stringSpacing * 6) / 2;
+      const rodHeight = Math.max(0.01, targetPos.y - highwaySurfaceY);
+      rodRef.current.scale.y = rodHeight;
+      rodRef.current.position.y = -rodHeight * 0.5;
+      rodRef.current.visible = visible;
+    }
+
     if (previewMeshRef.current && previewMaterialRef.current) {
       const previewVisible = timeUntilHit <= PREVIEW_LEAD_TIME_SEC && timeUntilHit >= -PREVIEW_FADE_OUT_SEC;
 
@@ -103,6 +112,19 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
       <mesh ref={meshRef}>
         <boxGeometry args={[width, height, depth]} />
         <meshStandardMaterial ref={materialRef} color={color} roughness={0.3} metalness={0.1} />
+
+        {note.string < 6 && (
+          <mesh ref={rodRef} position={[0, -0.5, 0]}>
+            <boxGeometry args={[Math.max(0.035, config.fretSpacing * 0.045), 1, Math.max(0.03, depth * 0.08)]} />
+            <meshStandardMaterial
+              color={color}
+              transparent
+              opacity={0.5}
+              roughness={0.6}
+              metalness={0.05}
+            />
+          </mesh>
+        )}
       </mesh>
 
       <mesh ref={previewMeshRef}>

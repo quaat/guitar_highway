@@ -16,12 +16,12 @@ const Scene: React.FC<SceneProps> = ({ notes, playheadRef, config }) => {
     <Canvas className="w-full h-full block bg-gray-900">
       <Suspense fallback={null}>
         <PerspectiveCamera makeDefault position={[0, 6, 8]} fov={50} />
-        <OrbitControls 
-          target={[0, 0, -10]} 
-          minPolarAngle={0} 
+        <OrbitControls
+          target={[0, 0, -10]}
+          minPolarAngle={0}
           maxPolarAngle={Math.PI / 2}
         />
-        
+
         {/* Lighting */}
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
@@ -32,16 +32,16 @@ const Scene: React.FC<SceneProps> = ({ notes, playheadRef, config }) => {
         <color attach="background" args={['#111827']} />
 
         {/* The Highway Structure */}
-        <Highway config={config} />
+        <Highway config={config} notes={notes} playheadRef={playheadRef} />
 
         {/* Notes */}
         <group>
           {notes.map((note) => (
-            <NoteObject 
-              key={note.id} 
-              note={note} 
-              playheadRef={playheadRef} 
-              config={config} 
+            <NoteObject
+              key={note.id}
+              note={note}
+              playheadRef={playheadRef}
+              config={config}
             />
           ))}
         </group>
