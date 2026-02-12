@@ -4,6 +4,8 @@ export interface TabxMeta {
   title?: string;
   artist?: string;
   bpm: number;
+  backingtrack?: string;
+  playbackDelayMs: number;
   timeSig: {
     num: number;
     den: number;

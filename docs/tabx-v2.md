@@ -5,7 +5,7 @@ TABX 2 supports loose/common ASCII tab text and separates rhythm from spacing.
 ## Structure
 
 - Header: `TABX 2`
-- Optional `meta:` block (`title`, `artist`, `bpm`, `time`, `tuning`, `capo`, `resolution`)
+- Optional `meta:` block (`title`, `artist`, `bpm`, `time`, `tuning`, `capo`, `resolution`, `backingtrack`, `playbackDelayMs`)
 - One or more `tab:` blocks with six ASCII string lines (`e B G D A E`)
 - Optional `rhythm:` block attached to the preceding `tab:` block
 
@@ -16,6 +16,20 @@ TABX 2 supports loose/common ASCII tab text and separates rhythm from spacing.
 - Techniques are tokenized and attached as note metadata:
   - `h`, `p`, `b`, `r`, `/`, `\`, `~`, `t`, `s`, `S`, `=`, `*`, `tr`, `TP`, `PM`, `M`, `x`
 - String labels normalize friendly variants (`b`/`H` => `B`).
+
+
+### Backing track metadata
+
+TABX 2 can define an optional backing track and a playback delay in milliseconds:
+
+```yaml
+meta:
+  backingtrack: ./my-song.webm
+  playbackDelayMs: 750
+```
+
+- `backingtrack` supports `.webm` and `.m4a` file paths/URLs.
+- `playbackDelayMs` delays note/playback start so the backing track can align with incoming notes.
 
 ## Rhythm block
 

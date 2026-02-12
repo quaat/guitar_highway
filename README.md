@@ -51,3 +51,99 @@ An interactive 3D music visualization prototype built with React, Three.js, and 
 *   **Song Loading**: Parse MIDI or Guitar Pro files into `NoteEvent` objects in `domain/`.
 *   **Input Handling**: Add a WebMIDI listener in `state/` to detect real guitar input.
 *   **Scoring**: Implement a collision detection function in `domain/` comparing input timestamp vs. note timestamp at Z=0.
+
+## 📄 TABX 2 Format Reference
+
+The importer supports a `TABX 2` text format with a YAML-like structure.
+
+### Required top-level structure
+
+```txt
+TABX 2
+
+meta:
+  ...optional metadata keys...
+
+tab: <Section Name>
+e|...|
+B|...|
+G|...|
+D|...|
+A|...|
+E|...|
+
+rhythm:
+  resolution: <slots per bar>
+  bars: [<bar1 slots>, <bar2 slots>, ...]
+```
+
+- First non-empty line must be exactly `TABX 2`.
+- At least one `tab:` block is required.
+- Each `tab:` block must contain all six strings in order: `e B G D A E`.
+- `rhythm:` is optional, but strongly recommended for deterministic timing.
+
+### `meta:` keys (all supported settings)
+
+All `meta:` fields are optional except that `bpm`/timing fields fall back to defaults.
+
+- `title: <string>`
+- `artist: <string>`
+- `bpm: <integer>` (default `120`)
+- `time: <num>/<den>` (default `4/4`)
+- `tuning: <6 pitches low-to-high>` (default `E2 A2 D3 G3 B3 E4`)
+- `capo: <integer>` (default `0`)
+- `resolution: <integer>` (default `16`)
+- `backingtrack: <path-or-url>` (`.webm` and `.m4a` are supported in-app)
+- `playbackDelayMs: <integer>` (default `0`)
+
+Example:
+
+```yaml
+meta:
+  title: Example Song
+  artist: Example Band
+  bpm: 128
+  time: 4/4
+  tuning: E2 A2 D3 G3 B3 E4
+  capo: 0
+  resolution: 16
+  backingtrack: ./my-song.webm
+  playbackDelayMs: 750
+```
+
+### Tab line syntax
+
+- Notes are read from ASCII tab lines like `e|---5h7---10b12--|`.
+- Multi-digit frets are supported (e.g. `10`, `12`, `24`).
+- Supported technique tokens include:
+  - `h`, `p`, `b`, `r`, `/`, `\`, `~`, `t`, `s`, `S`, `=`, `*`, `tr`, `TP`, `PM`, `M`, `x`
+
+### `rhythm:` block syntax
+
+Supported forms:
+
+```yaml
+rhythm:
+  resolution: 16
+  bars: [16, 16, 16]
+```
+
+or
+
+```yaml
+rhythm:
+  resolution: 16
+  bars:
+    - 16
+    - 16
+```
+
+- `resolution` defines the number of timing slots per bar.
+- `bars` defines per-bar slot counts for the section.
+- If `rhythm:` is omitted, timing is approximated from note grouping in each bar.
+
+### Playback behavior for backing tracks
+
+- Visual note playback starts immediately when you click **Play**.
+- If `backingtrack` is set, backing audio starts after `playbackDelayMs`.
+- Use positive delay values when your track should start later than the notes.
