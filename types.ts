@@ -5,6 +5,17 @@ export interface NoteEvent {
   time: number;   // seconds
   duration?: number;
   color?: string;
+  midi?: number;
+}
+
+export interface SongMeta {
+  title?: string;
+  artist?: string;
+  bpm: number;
+  timeSig: { num: number; den: number };
+  tuning: string[];
+  capo: number;
+  resolution: number;
 }
 
 export interface HighwayConfig {

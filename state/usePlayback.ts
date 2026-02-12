@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 
 export const usePlayback = () => {
   const [isPlaying, setIsPlaying] = useState(false);
-  // We use a ref for the actual time to avoid re-rendering components that just need to query time in a loop
+  const [resetToken, setResetToken] = useState(0);
   const playheadRef = useRef(0);
   const lastFrameTime = useRef(0);
   const requestRef = useRef<number>();
@@ -19,6 +19,7 @@ export const usePlayback = () => {
   const reset = useCallback(() => {
     setIsPlaying(false);
     playheadRef.current = 0;
+    setResetToken((prev) => prev + 1);
   }, []);
 
   useEffect(() => {
@@ -34,8 +35,8 @@ export const usePlayback = () => {
     if (isPlaying) {
       lastFrameTime.current = performance.now();
       requestRef.current = requestAnimationFrame(animate);
-    } else {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    } else if (requestRef.current) {
+      cancelAnimationFrame(requestRef.current);
     }
 
     return () => {
@@ -48,5 +49,6 @@ export const usePlayback = () => {
     playheadRef,
     togglePlay,
     reset,
+    resetToken,
   };
 };
