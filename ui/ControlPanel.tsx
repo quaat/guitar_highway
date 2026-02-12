@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, RotateCcw, Settings, FastForward, Eye, Download } from 'lucide-react';
+import { Play, Pause, RotateCcw, Settings, FastForward, Eye, Download, Guitar } from 'lucide-react';
 import { HighwayConfig, SongMeta } from '../types';
 
 interface ControlPanelProps {
@@ -81,6 +81,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               <span className="text-gray-400">{config.speed}</span>
             </div>
             <input type="range" min="5" max="50" step="1" value={config.speed} onChange={(e) => handleChange('speed', Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+          </div>
+
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="flex items-center gap-1"><Guitar size={12} />Neck Width</span>
+              <span className="text-gray-400">{config.stringSpacing.toFixed(2)}</span>
+            </div>
+            <input type="range" min="0.6" max="1.8" step="0.05" value={config.stringSpacing} onChange={(e) => {
+              const spacing = Number(e.target.value);
+              onConfigChange({ ...config, stringSpacing: spacing, laneHeight: spacing * 6 });
+            }} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
           </div>
 
           <div>
