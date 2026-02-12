@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo } from 'react';
-import { HighwayConfig, STRING_COLORS_MAP } from '../types';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { HighwayConfig, NoteEvent, STRING_COLORS_MAP } from '../types';
 import { Line, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { HighwayGuideLines } from './HighwayGuideLines';
+import { worldPositionForEvent } from '../domain/mapping';
 
 const INLAY_FRETS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
 const DOUBLE_INLAYS = [12, 24];
@@ -11,17 +13,29 @@ const GRID_OPACITY = 0.18;
 const GUIDE_OPACITY = 0.45;
 const FRET_THICKNESS = 0.09;
 
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
+
 interface HighwayProps {
   config: HighwayConfig;
+  notes: NoteEvent[];
+  playheadRef: React.MutableRefObject<number>;
 }
 
-export const Highway: React.FC<HighwayProps> = ({ config }) => {
+export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) => {
   const { fretSpacing, stringSpacing, viewDistance } = config;
+
+  const stringGlowDistance = config.stringGlowDistance ?? 14;
+  const laneGlowDistance = config.laneGlowDistance ?? 18;
+  const maxStringGlowIntensity = config.maxStringGlowIntensity ?? 0.95;
+  const maxLaneGlowIntensity = config.maxLaneGlowIntensity ?? 0.7;
 
   // X: 24 frets centered. Range approx [-12 * fretSpacing, 12 * fretSpacing]
   // Y: 6 strings centered. Range approx [-3 * stringSpacing, 3 * stringSpacing]
   const width = 24 * fretSpacing;
   const height = 6 * stringSpacing;
+
+  const stringGlowMaterialRefs = useRef<Array<THREE.MeshBasicMaterial | null>>([]);
+  const laneGlowMaterialRefs = useRef<Array<THREE.MeshBasicMaterial | null>>([]);
 
   const fretLines = useMemo(() => {
     return Array.from({ length: 25 }).map((_, i) => {
@@ -151,6 +165,57 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
     });
   }, [fretSpacing, height]);
 
+  useFrame(() => {
+    const closestByString = new Array<number>(6).fill(Number.POSITIVE_INFINITY);
+    const closestByLane = new Array<number>(24).fill(Number.POSITIVE_INFINITY);
+    const now = playheadRef.current;
+
+    for (const note of notes) {
+      const notePos = worldPositionForEvent(note, now, config);
+      if (notePos.z > 0) continue;
+
+      const distanceToHit = Math.abs(notePos.z);
+      const stringIndex = note.string - 1;
+      const laneIndex = note.fret - 1;
+
+      if (stringIndex >= 0 && stringIndex < closestByString.length) {
+        closestByString[stringIndex] = Math.min(closestByString[stringIndex], distanceToHit);
+      }
+
+      if (laneIndex >= 0 && laneIndex < closestByLane.length) {
+        closestByLane[laneIndex] = Math.min(closestByLane[laneIndex], distanceToHit);
+      }
+    }
+
+    for (let i = 0; i < 6; i += 1) {
+      const mat = stringGlowMaterialRefs.current[i];
+      if (!mat) continue;
+
+      const distance = closestByString[i];
+      const proximity = Number.isFinite(distance)
+        ? clamp01(1 - (distance / stringGlowDistance))
+        : 0;
+      const intensity = proximity * maxStringGlowIntensity;
+
+      mat.opacity = 0.03 + intensity * 0.75;
+      mat.color.set(STRING_COLORS_MAP[i + 1]).multiplyScalar(1 + intensity * 0.65);
+    }
+
+    for (let i = 0; i < 24; i += 1) {
+      const mat = laneGlowMaterialRefs.current[i];
+      if (!mat) continue;
+
+      const distance = closestByLane[i];
+      const proximity = Number.isFinite(distance)
+        ? clamp01(1 - (distance / laneGlowDistance))
+        : 0;
+      const intensity = proximity * maxLaneGlowIntensity;
+
+      mat.opacity = intensity * 0.5;
+      mat.color.set('#cbd5e1').multiplyScalar(1 + intensity * 0.7);
+    }
+  });
+
   useEffect(() => {
     const highwayBox = {
       min: {
@@ -204,6 +269,34 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
       {stringLines}
       {inlays}
 
+      <group renderOrder={4.5}>
+        {Array.from({ length: 24 }).map((_, laneIndex) => {
+          const fret = laneIndex + 1;
+          const fretProbeEvent: NoteEvent = {
+            id: `lane-glow-${fret}`,
+            string: 1,
+            fret,
+            time: 0,
+          };
+          const pos = worldPositionForEvent(fretProbeEvent, 0, config);
+
+          return (
+            <mesh key={`lane-glow-${fret}`} position={[pos.x, -height / 2, -viewDistance / 2 + 0.03]}>
+              <boxGeometry args={[FRET_THICKNESS * 1.25, 0.055, viewDistance]} />
+              <meshBasicMaterial
+                ref={(material) => {
+                  laneGlowMaterialRefs.current[laneIndex] = material;
+                }}
+                color="#cbd5e1"
+                transparent
+                opacity={0}
+                depthWrite={false}
+              />
+            </mesh>
+          );
+        })}
+      </group>
+
       <HighwayGuideLines
         config={config}
         guideOpacity={GUIDE_OPACITY}
@@ -212,6 +305,28 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
       />
 
       {fretOverlays}
+
+      <group renderOrder={6}>
+        {Array.from({ length: 6 }).map((_, i) => {
+          const s = i + 1;
+          const y = (s - 3.5) * stringSpacing;
+
+          return (
+            <mesh key={`string-glow-${s}`} position={[0, y, 0.045]}>
+              <planeGeometry args={[width, 0.07]} />
+              <meshBasicMaterial
+                ref={(material) => {
+                  stringGlowMaterialRefs.current[i] = material;
+                }}
+                color={STRING_COLORS_MAP[s]}
+                transparent
+                opacity={0.03}
+                depthWrite={false}
+              />
+            </mesh>
+          );
+        })}
+      </group>
 
       {/* Hit Line Frame */}
       <Line

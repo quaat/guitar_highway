@@ -7,6 +7,10 @@ export const DEFAULT_HIGHWAY_CONFIG: HighwayConfig = {
   viewDistance: 100,
   laneWidth: 30, // derived approx from fretSpacing * 24
   laneHeight: 6, // derived approx from stringSpacing * 6
+  stringGlowDistance: 14,
+  laneGlowDistance: 18,
+  maxStringGlowIntensity: 0.95,
+  maxLaneGlowIntensity: 0.7,
 };
 
 export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
