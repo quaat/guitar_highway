@@ -1,0 +1,44 @@
+# TABX 2 (ASCII + Rhythm)
+
+TABX 2 supports loose/common ASCII tab text and separates rhythm from spacing.
+
+## Structure
+
+- Header: `TABX 2`
+- Optional `meta:` block (`title`, `artist`, `bpm`, `time`, `tuning`, `capo`, `resolution`)
+- One or more `tab:` blocks with six ASCII string lines (`e B G D A E`)
+- Optional `rhythm:` block attached to the preceding `tab:` block
+
+## Tab parsing
+
+- Accepts classic lines like `e|---5h7---|---10b12--|`
+- Multi-digit frets (`10`, `12`, `24`) are supported.
+- Techniques are tokenized and attached as note metadata:
+  - `h`, `p`, `b`, `r`, `/`, `\`, `~`, `t`, `s`, `S`, `=`, `*`, `tr`, `TP`, `PM`, `M`, `x`
+- String labels normalize friendly variants (`b`/`H` => `B`).
+
+## Rhythm block
+
+Rhythm is explicit and **not inferred from spacing**.
+
+Supported forms:
+
+```yaml
+rhythm:
+  resolution: 16
+  bars: [16, 16, 16]
+```
+
+or list form:
+
+```yaml
+rhythm:
+  resolution: 16
+  bars:
+    - 16
+    - 16
+```
+
+Each bar has `resolution` slots. Unique note column groups are mapped into slots in order.
+
+If `rhythm:` is missing, timing is approximated and a warning is emitted.

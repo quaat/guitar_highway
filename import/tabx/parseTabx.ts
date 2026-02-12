@@ -1,7 +1,4 @@
-import { ParseError, PitchName, TabxBar, TabxMeta, TabxNoteCell, TabxSection, TabxSong } from './types';
-
-const STRING_LABELS = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
-const SUPPORTED_META_KEYS = new Set(['title', 'artist', 'bpm', 'time', 'tuning', 'capo', 'resolution']);
+import { ParseDiagnostic, ParseError, PitchName, TabxBar, TabxMeta, TabxNoteCell, TabxSection, TabxSong, TabxTechnique } from './types';
 
 const DEFAULT_META: TabxMeta = {
   bpm: 120,
@@ -11,6 +8,25 @@ const DEFAULT_META: TabxMeta = {
   resolution: 16,
 };
 
+const TABX_V1 = 'TABX 1';
+const TABX_V2 = 'TABX 2';
+const STRING_ALIAS_MAP: Record<string, string> = {
+  e: 'e',
+  B: 'B',
+  b: 'B',
+  H: 'B',
+  h: 'B',
+  G: 'G',
+  g: 'G',
+  D: 'D',
+  d: 'D',
+  A: 'A',
+  a: 'A',
+  E: 'E',
+};
+const EXPECTED_STRING_ORDER = ['e', 'B', 'G', 'D', 'A', 'E'];
+const TECHNIQUE_TOKENS = ['PM', 'TP', 'tr', 'h', 'p', 't', 'b', 'r', 's', 'S', '/', '\\', '~', '=', '*', 'M', 'x'];
+
 const stripInlineComment = (line: string): string => {
   const idx = line.indexOf('#');
   return idx >= 0 ? line.slice(0, idx).trimEnd() : line;
@@ -18,251 +34,326 @@ const stripInlineComment = (line: string): string => {
 
 const isEmptyOrComment = (line: string): boolean => stripInlineComment(line).trim().length === 0;
 
-export const parseTabx = (text: string): { song?: TabxSong; errors: ParseError[] } => {
-  const lines = text.split(/\r?\n/);
-  const errors: ParseError[] = [];
-  let i = 0;
+const parseMetaBlock = (lines: string[], startAt: number, diagnostics: ParseDiagnostic[]): { meta: TabxMeta; i: number } => {
+  const meta: TabxMeta = { ...DEFAULT_META };
+  let i = startAt;
 
-  const addError = (line: number, column: number, message: string) => {
-    errors.push({ message, line, column, contextLine: lines[line - 1] ?? '' });
-  };
-
-  const skipEmpty = () => {
-    while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
-  };
-
-  skipEmpty();
-  if (i >= lines.length || stripInlineComment(lines[i]).trim() !== 'TABX 1') {
-    addError(i + 1, 1, 'First non-empty line must be exactly "TABX 1".');
-    return { errors };
+  if (stripInlineComment(lines[i] ?? '').trim() !== 'meta:') {
+    return { meta, i };
   }
   i += 1;
 
-  const meta: TabxMeta = { ...DEFAULT_META };
+  const addError = (line: number, column: number, message: string) => {
+    diagnostics.push({ severity: 'error', message, line, column, contextLine: lines[line - 1] ?? '' });
+  };
 
-  skipEmpty();
-  if (i < lines.length && stripInlineComment(lines[i]).trim() === 'meta:') {
-    i += 1;
-    while (i < lines.length) {
-      const raw = lines[i];
-      const noComment = stripInlineComment(raw);
-      if (noComment.trim().length === 0) {
-        i += 1;
-        continue;
-      }
-      if (!noComment.startsWith('  ')) {
-        if (/^\s+/.test(noComment)) {
-          addError(i + 1, 1, 'Meta fields must be indented with exactly 2 spaces.');
-          i += 1;
-          continue;
-        }
-        break;
-      }
-      if (noComment.startsWith('   ')) {
-        addError(i + 1, 1, 'Meta fields must be indented with exactly 2 spaces.');
-        i += 1;
-        continue;
-      }
-      const metaLine = noComment.slice(2);
-      const colonIdx = metaLine.indexOf(':');
-      if (colonIdx <= 0) {
-        addError(i + 1, 3, 'Invalid meta line. Expected "key: value".');
-        i += 1;
-        continue;
-      }
-      const key = metaLine.slice(0, colonIdx).trim();
-      const value = metaLine.slice(colonIdx + 1).trim();
-      if (!SUPPORTED_META_KEYS.has(key)) {
-        addError(i + 1, 3, `Unsupported meta key "${key}".`);
-        i += 1;
-        continue;
-      }
-
-      if (key === 'title' || key === 'artist') {
-        (meta as any)[key] = value;
-      } else if (key === 'bpm' || key === 'capo' || key === 'resolution') {
-        const parsed = Number(value);
-        if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-          addError(i + 1, colonIdx + 4, `${key} must be an integer.`);
-        } else if (key === 'bpm' && parsed <= 0) {
-          addError(i + 1, colonIdx + 4, 'bpm must be > 0.');
-        } else if (key === 'capo' && parsed < 0) {
-          addError(i + 1, colonIdx + 4, 'capo must be >= 0.');
-        } else if (key === 'resolution' && parsed !== 16) {
-          addError(i + 1, colonIdx + 4, 'Only resolution 16 is supported in TABX v1.');
-        } else {
-          (meta as any)[key] = parsed;
-        }
-      } else if (key === 'time') {
-        const m = value.match(/^(\d+)\/(\d+)$/);
-        if (!m) {
-          addError(i + 1, colonIdx + 4, 'time must be in "num/den" format, e.g. 4/4.');
-        } else {
-          meta.timeSig = { num: Number(m[1]), den: Number(m[2]) };
-        }
-      } else if (key === 'tuning') {
-        const pitches = value.split(/\s+/).filter(Boolean) as PitchName[];
-        if (pitches.length !== 6) {
-          addError(i + 1, colonIdx + 4, 'tuning must contain exactly 6 pitches (low-to-high).');
-        } else {
-          meta.tuning = pitches;
-        }
-      }
+  while (i < lines.length) {
+    const raw = stripInlineComment(lines[i]);
+    if (raw.trim().length === 0) {
       i += 1;
+      continue;
+    }
+    if (!raw.startsWith('  ')) {
+      break;
+    }
+
+    const content = raw.slice(2);
+    const colonIdx = content.indexOf(':');
+    if (colonIdx < 1) {
+      addError(i + 1, 3, 'Invalid meta line. Expected "key: value".');
+      i += 1;
+      continue;
+    }
+
+    const key = content.slice(0, colonIdx).trim();
+    const value = content.slice(colonIdx + 1).trim();
+    if (key === 'title' || key === 'artist') {
+      (meta as any)[key] = value;
+    } else if (key === 'bpm' || key === 'capo' || key === 'resolution') {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        addError(i + 1, colonIdx + 4, `${key} must be an integer.`);
+      } else {
+        (meta as any)[key] = parsed;
+      }
+    } else if (key === 'time') {
+      const m = value.match(/^(\d+)\/(\d+)$/);
+      if (!m) {
+        addError(i + 1, colonIdx + 4, 'time must be in "num/den" format, e.g. 4/4.');
+      } else {
+        meta.timeSig = { num: Number(m[1]), den: Number(m[2]) };
+      }
+    } else if (key === 'tuning') {
+      const pitches = value.split(/\s+/).filter(Boolean) as PitchName[];
+      if (pitches.length !== 6) {
+        addError(i + 1, colonIdx + 4, 'tuning must contain exactly 6 pitches (low-to-high).');
+      } else {
+        meta.tuning = pitches;
+      }
+    }
+
+    i += 1;
+  }
+
+  return { meta, i };
+};
+
+const normalizeStringLabel = (label: string): string | undefined => STRING_ALIAS_MAP[label];
+
+const tokenizeStringContent = (content: string, stringIndex: number): Array<TabxNoteCell & { bar: number }> => {
+  const notes: Array<TabxNoteCell & { bar: number }> = [];
+  let cursor = 0;
+  let bar = 0;
+  let idx = 0;
+  let previousNote: (TabxNoteCell & { bar: number }) | undefined;
+
+  const attachTechnique = (symbol: string, text?: string) => {
+    if (!previousNote) return;
+    previousNote.techniques = previousNote.techniques ?? [];
+    previousNote.techniques.push({ symbol, text });
+  };
+
+  const startsWithTechnique = () => TECHNIQUE_TOKENS.find((token) => content.startsWith(token, idx));
+
+  while (idx < content.length) {
+    const ch = content[idx];
+    if (ch === '|') {
+      bar += 1;
+      cursor = 0;
+      idx += 1;
+      continue;
+    }
+    if (ch === '-' || ch === ' ') {
+      cursor += 1;
+      idx += 1;
+      continue;
+    }
+
+    const fretMatch = content.slice(idx).match(/^(\d{1,2})/);
+    if (fretMatch) {
+      const fret = Number(fretMatch[1]);
+      const note: TabxNoteCell & { bar: number } = { stringIndex, col: cursor, fret, techniques: [], bar: Math.max(0, bar - 1) };
+      notes.push(note);
+      previousNote = note;
+      cursor += fretMatch[1].length;
+      idx += fretMatch[1].length;
+      continue;
+    }
+
+    const technique = startsWithTechnique();
+    if (technique) {
+      if (technique === 'x') {
+        const muted: TabxNoteCell & { bar: number } = {
+          stringIndex,
+          col: cursor,
+          fret: 0,
+          techniques: [{ symbol: 'x', text: 'muted' }],
+          bar: Math.max(0, bar - 1),
+        };
+        notes.push(muted);
+        previousNote = muted;
+      } else {
+        attachTechnique(technique);
+      }
+      cursor += technique.length;
+      idx += technique.length;
+      continue;
+    }
+
+    cursor += 1;
+    idx += 1;
+  }
+
+  for (let j = 0; j < notes.length - 1; j += 1) {
+    const cur = notes[j];
+    const next = notes[j + 1];
+    const connector = cur.techniques?.find((t) => ['h', 'p', 'b', 'r', '/', '\\', 's', 'S', 't'].includes(t.symbol));
+    if (connector && cur.bar === next.bar) {
+      connector.connectsToCol = next.col;
     }
   }
 
+  return notes;
+};
+
+const assignSlots = (
+  events: TabxNoteCell[],
+  resolution: number,
+): TabxNoteCell[] => {
+  const uniqueCols = Array.from(new Set(events.map((e) => e.col))).sort((a, b) => a - b);
+  const colToSlot = new Map<number, number>();
+  if (uniqueCols.length === 0) return events;
+
+  uniqueCols.forEach((col, idx) => {
+    const slot = uniqueCols.length === 1 ? 0 : Math.round((idx / (uniqueCols.length - 1)) * Math.max(0, resolution - 1));
+    colToSlot.set(col, slot);
+  });
+
+  return events.map((event) => ({ ...event, slot: colToSlot.get(event.col) ?? 0 }));
+};
+
+export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: ParseDiagnostic[]; errors: ParseError[] } => {
+  const lines = text.split(/\r?\n/);
+  const diagnostics: ParseDiagnostic[] = [];
+  const addError = (line: number, column: number, message: string) => {
+    diagnostics.push({ severity: 'error', message, line, column, contextLine: lines[line - 1] ?? '' });
+  };
+  const addWarning = (line: number, column: number, message: string) => {
+    diagnostics.push({ severity: 'warning', message, line, column, contextLine: lines[line - 1] ?? '' });
+  };
+
+  let i = 0;
+  while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
+  if (stripInlineComment(lines[i] ?? '').trim() !== TABX_V2) {
+    addError(i + 1, 1, 'First non-empty line must be exactly "TABX 2".');
+    return { diagnostics, errors: diagnostics.filter((d) => d.severity === 'error') };
+  }
+  i += 1;
+  while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
+
+  const parsedMeta = parseMetaBlock(lines, i, diagnostics);
+  const meta = parsedMeta.meta;
+  i = parsedMeta.i;
+
   const sections: TabxSection[] = [];
   while (i < lines.length) {
-    skipEmpty();
+    while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
     if (i >= lines.length) break;
 
-    const sectionLine = stripInlineComment(lines[i]).trim();
-    if (!sectionLine.startsWith('section:')) {
-      addError(i + 1, 1, 'Expected "section: <name>".');
+    const header = stripInlineComment(lines[i]).trim();
+    if (!header.startsWith('tab:')) {
+      addError(i + 1, 1, 'Expected "tab: <name>" block.');
       i += 1;
       continue;
     }
-    const name = sectionLine.slice('section:'.length).trim();
-    if (!name) {
-      addError(i + 1, 1, 'Section name is required.');
-      i += 1;
-      continue;
-    }
+    const name = header.slice(4).trim() || `Section ${sections.length + 1}`;
     i += 1;
 
-    const bars: TabxBar[] = [];
-    let expectedBar = 1;
-
+    const stringLines = new Map<string, string>();
+    const sourceStartLine = i;
     while (i < lines.length) {
-      skipEmpty();
-      if (i >= lines.length) break;
-      const maybeNextSection = stripInlineComment(lines[i]).trim();
-      if (maybeNextSection.startsWith('section:')) break;
-
-      const marker = maybeNextSection.match(/^\|(\d+)\|$/);
-      if (!marker) {
-        addError(i + 1, 1, 'Expected bar marker line "|<barNumber>|".');
+      const row = stripInlineComment(lines[i]);
+      const trimmed = row.trim();
+      if (!trimmed) {
+        i += 1;
+        if (i < lines.length && /^\s*(rhythm:|tab:|meta:)/.test(stripInlineComment(lines[i]))) {
+          break;
+        }
+        continue;
+      }
+      if (/^\s*(rhythm:|tab:|meta:)/.test(trimmed)) break;
+      const match = row.match(/^\s*([A-Za-z])\|(.*)$/);
+      if (!match) {
         i += 1;
         continue;
       }
-      const barIndex = Number(marker[1]);
-      if (barIndex !== expectedBar) {
-        addError(i + 1, 1, `Bar number ${barIndex} is out of sequence. Expected ${expectedBar}.`);
-        expectedBar = barIndex;
+      const normalized = normalizeStringLabel(match[1]);
+      if (!normalized) {
+        addWarning(i + 1, 1, `Ignoring unsupported string label "${match[1]}".`);
+        i += 1;
+        continue;
       }
+      stringLines.set(normalized, match[2]);
       i += 1;
+    }
 
-      const stringRows: string[] = [];
-      for (let s = 0; s < 6; s += 1) {
-        if (i >= lines.length) {
-          addError(i, 1, 'Unexpected end of file while reading bar strings.');
-          break;
-        }
+    if (EXPECTED_STRING_ORDER.some((label) => !stringLines.has(label))) {
+      addError(sourceStartLine + 1, 1, 'Tab block must include all six string lines: e B G D A E.');
+      continue;
+    }
+
+    const perStringNotes = EXPECTED_STRING_ORDER.map((label, stringIndex) => tokenizeStringContent(stringLines.get(label) ?? '', stringIndex));
+    const barCount = Math.max(
+      1,
+      ...perStringNotes.map((rows) => (rows.length ? Math.max(...rows.map((n) => n.bar + 1)) : 1)),
+    );
+
+    let rhythmResolution: number | undefined;
+    let rhythmBars: number[] | undefined;
+    while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
+    if (i < lines.length && stripInlineComment(lines[i]).trim() === 'rhythm:') {
+      i += 1;
+      rhythmResolution = 16;
+      rhythmBars = [];
+      while (i < lines.length) {
         const row = stripInlineComment(lines[i]);
-        const expected = STRING_LABELS[s];
-        if (!row.startsWith(`${expected}|`)) {
-          addError(i + 1, 1, `Expected string line "${expected}|...".`);
+        const trimmed = row.trim();
+        if (!trimmed) {
+          i += 1;
+          continue;
         }
-        stringRows.push(row.slice(2));
+        if (/^\s*(tab:|meta:|rhythm:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
+        const resolutionMatch = row.match(/^\s*resolution:\s*(\d+)\s*$/);
+        if (resolutionMatch) {
+          rhythmResolution = Number(resolutionMatch[1]);
+          i += 1;
+          continue;
+        }
+        const barNumberItem = row.match(/^\s*-\s*(\d+)\s*$/);
+        if (barNumberItem) {
+          rhythmBars.push(Number(barNumberItem[1]));
+          i += 1;
+          continue;
+        }
+        if (/^\s*bars:\s*\[(.*)\]\s*$/.test(row)) {
+          const inside = row.replace(/^\s*bars:\s*\[/, '').replace(/\]\s*$/, '');
+          rhythmBars = inside.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0);
+          i += 1;
+          continue;
+        }
         i += 1;
       }
+    }
 
-      if (stringRows.length !== 6) break;
-      const widths = stringRows.map((row) => parseGridRow(row, i - 5, addError));
-      const firstWidth = widths[0].cols;
-      if (widths.some((w) => w.cols !== firstWidth)) {
-        addError(i, 1, 'All six string rows in a bar must have the same number of columns.');
-      }
-      if (firstWidth !== meta.resolution) {
-        addError(i, 1, `Bar grid must resolve to exactly ${meta.resolution} columns.`);
-      }
+    const bars: TabxBar[] = [];
+    for (let barIndex = 0; barIndex < barCount; barIndex += 1) {
+      const events = perStringNotes
+        .flatMap((rows) => rows.filter((n) => n.bar === barIndex).map(({ bar: _bar, ...event }) => event));
 
-      const events: TabxNoteCell[] = [];
-      widths.forEach((rowResult, stringIndex) => {
-        rowResult.notes.forEach((note) => {
-          events.push({ stringIndex, col: note.col, fret: note.fret });
-        });
+      const resolutionForBar = rhythmBars?.[barIndex] ?? rhythmResolution ?? meta.resolution;
+      const eventsWithSlots = assignSlots(events, resolutionForBar);
+      bars.push({
+        index: barIndex + 1,
+        events: eventsWithSlots,
+        rhythmResolution: resolutionForBar,
       });
+    }
 
-      bars.push({ index: barIndex, events });
-      expectedBar = barIndex + 1;
+    if (!rhythmBars && !rhythmResolution) {
+      addWarning(sourceStartLine + 1, 1, `Section "${name}" has no rhythm block. Timing will be approximated.`);
     }
 
     sections.push({ name, bars });
   }
 
-  if (sections.length === 0) {
-    addError(i + 1, 1, 'At least one section is required.');
+  if (!sections.length) {
+    addError(i + 1, 1, 'At least one tab block is required.');
   }
 
-  if (errors.length > 0) {
-    return { errors };
+  const errors = diagnostics.filter((d) => d.severity === 'error').map((d) => ({
+    message: d.message,
+    line: d.line,
+    column: d.column,
+    contextLine: d.contextLine,
+  }));
+
+  if (errors.length) {
+    return { diagnostics, errors };
   }
 
-  return {
-    song: {
-      meta,
-      sections,
-    },
-    errors,
-  };
+  return { song: { meta, sections }, diagnostics, errors: [] };
 };
 
-const parseGridRow = (
-  row: string,
-  lineNumber: number,
-  addError: (line: number, column: number, message: string) => void,
-): { cols: number; notes: Array<{ col: number; fret: number }> } => {
-  const notes: Array<{ col: number; fret: number }> = [];
-  let col = 0;
-
-  for (let idx = 0; idx < row.length; ) {
-    const ch = row[idx];
-    if (ch === '-') {
-      col += 1;
-      idx += 1;
-      continue;
-    }
-
-    if (ch === '|') {
-      idx += 1;
-      continue;
-    }
-
-    if (/\d/.test(ch)) {
-      notes.push({ col, fret: Number(ch) });
-      col += 1;
-      idx += 1;
-      continue;
-    }
-
-    if (ch === '[') {
-      const close = row.indexOf(']', idx + 1);
-      if (close === -1) {
-        addError(lineNumber, idx + 3, 'Unclosed bracketed fret value.');
-        idx += 1;
-        continue;
-      }
-      const fretText = row.slice(idx + 1, close);
-      if (!/^\d{2}$/.test(fretText)) {
-        addError(lineNumber, idx + 3, 'Bracketed fret must have exactly 2 digits, e.g. [10].');
-      } else {
-        const fret = Number(fretText);
-        if (fret < 10 || fret > 24) {
-          addError(lineNumber, idx + 3, 'Bracketed fret must be between 10 and 24.');
-        } else {
-          notes.push({ col, fret });
-        }
-      }
-      col += 1;
-      idx = close + 1;
-      continue;
-    }
-
-    addError(lineNumber, idx + 3, `Invalid grid character "${ch}".`);
-    idx += 1;
+export const parseTabx = (text: string): { song?: TabxSong; errors: ParseError[] } => {
+  const lines = text.split(/\r?\n/);
+  const first = lines.find((line) => stripInlineComment(line).trim().length > 0);
+  if (stripInlineComment(first ?? '').trim() === TABX_V2) {
+    const parsed = parseTabx2Ascii(text);
+    return { song: parsed.song, errors: parsed.errors };
   }
 
-  return { cols: col, notes };
+  // Legacy TABX 1 fallback: a strict subset with one section/bar marker style.
+  const converted = text.replace(TABX_V1, TABX_V2).replace(/section:/g, 'tab:').replace(/^\|\d+\|$/gm, '');
+  const parsed = parseTabx2Ascii(converted);
+  return { song: parsed.song, errors: parsed.errors };
 };

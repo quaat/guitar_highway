@@ -6,6 +6,7 @@ export interface NoteEvent {
   duration?: number;
   color?: string;
   midi?: number;
+  techniques?: Array<{ symbol: string; text?: string; connectsToCol?: number }>;
 }
 
 export interface SongMeta {

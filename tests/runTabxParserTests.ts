@@ -1,37 +1,71 @@
-import { parseTabx } from '../import/tabx/parseTabx';
+import { parseTabx2Ascii } from '../import/tabx/parseTabx';
+import { tabxSongToEvents } from '../import/tabx/convertTabx';
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message);
 };
 
-const valid = `TABX 1
+const valid = `TABX 2
 
 meta:
-  title: Example Riff
-  artist: Unknown
+  title: Example
   bpm: 120
   time: 4/4
   tuning: E2 A2 D3 G3 B3 E4
   capo: 0
 
-section: Intro
+tab: Intro
+e|--5h7---10b12--12*--|
+B|---------------------|
+G|---------------------|
+D|---------------------|
+A|---------------------|
+E|---------------------|
 
-|1|
-e|----------------|
-B|----------------|
-G|------0---2-----|
-D|--0-------------|
-A|----------------|
-E|----------------|
+rhythm:
+  resolution: 16
+  bars: [16]
 `;
 
 const tests: Array<{ name: string; run: () => void }> = [
-  { name: 'valid file', run: () => { const out = parseTabx(valid); assert(out.errors.length === 0, 'should parse'); assert(out.song?.sections.length === 1, 'section count'); } },
-  { name: 'bad header', run: () => { const out = parseTabx(valid.replace('TABX 1', 'TABX v1')); assert(out.errors.some((e) => e.message.includes('TABX 1')), 'header error'); } },
-  { name: 'wrong indentation in meta', run: () => { const out = parseTabx(valid.replace('  bpm: 120', ' bpm: 120')); assert(out.errors.length > 0, 'indentation error'); } },
-  { name: 'non-sequential bars', run: () => { const out = parseTabx(valid.replace('|1|', '|2|')); assert(out.errors.some((e) => e.message.includes('out of sequence')), 'sequence error'); } },
-  { name: 'wrong string labels/order', run: () => { const out = parseTabx(valid.replace('B|----------------|', 'X|----------------|')); assert(out.errors.some((e) => e.message.includes('Expected string line')), 'label error'); } },
-  { name: 'malformed frets', run: () => { const out = parseTabx(valid.replace('------0---2-----', '----[x]---[100]-')); assert(out.errors.some((e) => e.message.includes('Bracketed fret')), 'fret error'); } },
+  {
+    name: 'valid TABX 2 parse',
+    run: () => {
+      const out = parseTabx2Ascii(valid);
+      assert(out.errors.length === 0, 'should parse');
+      assert(out.song?.sections.length === 1, 'section count');
+    },
+  },
+  {
+    name: 'multi-digit frets and techniques are captured',
+    run: () => {
+      const out = parseTabx2Ascii(valid);
+      assert(out.song, 'song exists');
+      const notes = out.song!.sections[0].bars[0].events;
+      assert(notes.some((n) => n.fret === 10), '10 fret parsed');
+      assert(notes.some((n) => n.fret === 12), '12 fret parsed');
+      assert(notes.some((n) => n.techniques?.some((t) => t.symbol === 'h')), 'hammer-on metadata');
+      assert(notes.some((n) => n.techniques?.some((t) => t.symbol === 'b')), 'bend metadata');
+      assert(notes.some((n) => n.techniques?.some((t) => t.symbol === '*')), 'harmonic metadata');
+    },
+  },
+  {
+    name: 'missing rhythm emits warning',
+    run: () => {
+      const out = parseTabx2Ascii(valid.replace(/\nrhythm:[\s\S]*$/, ''));
+      assert(out.diagnostics.some((d) => d.severity === 'warning'), 'warning expected');
+    },
+  },
+  {
+    name: 'events conversion uses slot timing',
+    run: () => {
+      const out = parseTabx2Ascii(valid);
+      assert(out.song, 'song exists');
+      const converted = tabxSongToEvents(out.song!);
+      assert(converted.totalNotes > 0, 'notes converted');
+      assert(converted.notes.every((n) => Number.isFinite(n.time)), 'times are finite');
+    },
+  },
 ];
 
 let failures = 0;
