@@ -13,15 +13,24 @@ export interface TabxMeta {
   resolution: number;
 }
 
+export interface TabxTechnique {
+  symbol: string;
+  text?: string;
+  connectsToCol?: number;
+}
+
 export interface TabxNoteCell {
   stringIndex: number; // 0=high e, 5=low E
   col: number;
   fret: number;
+  slot?: number;
+  techniques?: TabxTechnique[];
 }
 
 export interface TabxBar {
   index: number;
   events: TabxNoteCell[];
+  rhythmResolution?: number;
 }
 
 export interface TabxSection {
@@ -32,6 +41,14 @@ export interface TabxSection {
 export interface TabxSong {
   meta: TabxMeta;
   sections: TabxSection[];
+}
+
+export interface ParseDiagnostic {
+  severity: 'error' | 'warning';
+  message: string;
+  line: number;
+  column: number;
+  contextLine: string;
 }
 
 export interface ParseError {

@@ -42,9 +42,9 @@ export interface ConvertedSong {
   totalNotes: number;
 }
 
-export const convertTabxToEvents = (song: TabxSong): ConvertedSong => {
+export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
   const notes: NoteEvent[] = [];
-  const { bpm, timeSig, resolution, tuning, capo } = song.meta;
+  const { bpm, timeSig, tuning, capo, resolution } = song.meta;
   const beatDurationSec = 60 / bpm;
   const barDurationSec = beatDurationSec * timeSig.num * (4 / timeSig.den);
   let sectionStartSec = 0;
@@ -53,8 +53,12 @@ export const convertTabxToEvents = (song: TabxSong): ConvertedSong => {
   song.sections.forEach((section) => {
     section.bars.forEach((bar, barIdx) => {
       const barStartSec = sectionStartSec + barIdx * barDurationSec;
+      const barResolution = bar.rhythmResolution ?? resolution;
+      const slotDurationSec = barDurationSec / Math.max(1, barResolution);
+
       bar.events.forEach((event) => {
-        const time = barStartSec + (event.col * barDurationSec) / resolution;
+        const slot = event.slot ?? Math.round((event.col / Math.max(1, resolution - 1)) * Math.max(0, barResolution - 1));
+        const time = barStartSec + slot * slotDurationSec;
         const string = 6 - event.stringIndex;
         notes.push({
           id: `tabx-${idCounter++}`,
@@ -64,6 +68,7 @@ export const convertTabxToEvents = (song: TabxSong): ConvertedSong => {
           duration: 0.12,
           color: STRING_COLORS_MAP[string],
           midi: midiFromStringFret(tuning, capo, event.stringIndex, event.fret),
+          techniques: event.techniques,
         } as NoteEvent & { midi: number });
       });
     });
@@ -78,3 +83,5 @@ export const convertTabxToEvents = (song: TabxSong): ConvertedSong => {
     totalNotes: notes.length,
   };
 };
+
+export const convertTabxToEvents = tabxSongToEvents;

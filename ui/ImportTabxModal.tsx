@@ -1,50 +1,56 @@
 import React, { useMemo, useState } from 'react';
-import { parseTabx } from '../import/tabx/parseTabx';
-import { convertTabxToEvents } from '../import/tabx/convertTabx';
-import { ParseError, TabxSong } from '../import/tabx/types';
+import { parseTabx, parseTabx2Ascii } from '../import/tabx/parseTabx';
+import { tabxSongToEvents } from '../import/tabx/convertTabx';
+import { ParseDiagnostic, ParseError, TabxSong } from '../import/tabx/types';
 
 interface ImportTabxModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (song: TabxSong, notes: ReturnType<typeof convertTabxToEvents>) => void;
+  onImport: (song: TabxSong, notes: ReturnType<typeof tabxSongToEvents>) => void;
 }
 
-const DEFAULT_TEXT = `TABX 1
+const DEFAULT_TEXT = `TABX 2
 
 meta:
-  title: Example Riff
-  artist: Unknown
+  title: Example
   bpm: 120
   time: 4/4
   tuning: E2 A2 D3 G3 B3 E4
   capo: 0
 
-section: Intro
+tab: Intro
+e|-----0------|-----0------|
+B|-----1------|-----1------|
+G|-----0------|-----0------|
+D|-----2------|-----2------|
+A|-----3------|-----3------|
+E|------------|------------|
 
-|1|
-e|----------------|
-B|----------------|
-G|------0---2-----|
-D|--0-------------|
-A|----------------|
-E|----------------|
+rhythm:
+  resolution: 16
+  bars: [16, 16]
 `;
 
 const ImportTabxModal: React.FC<ImportTabxModalProps> = ({ isOpen, onClose, onImport }) => {
   const [text, setText] = useState(DEFAULT_TEXT);
   const [errors, setErrors] = useState<ParseError[]>([]);
+  const [warnings, setWarnings] = useState<ParseDiagnostic[]>([]);
   const [preview, setPreview] = useState<{ title?: string; bpm: number; sections: number; bars: number; notes: number }>();
   const [parsedSong, setParsedSong] = useState<TabxSong>();
 
   const errorText = useMemo(() => errors.slice(0, 10), [errors]);
+  const warningText = useMemo(() => warnings.slice(0, 10), [warnings]);
 
   if (!isOpen) return null;
 
   const parse = () => {
-    const result = parseTabx(text);
+    const isV2 = text.split(/\r?\n/).find((line) => line.trim().length > 0)?.trim() === 'TABX 2';
+    const result = isV2 ? parseTabx2Ascii(text) : { ...parseTabx(text), diagnostics: [] };
     setErrors(result.errors);
+    setWarnings((result.diagnostics ?? []).filter((d) => d.severity === 'warning'));
+
     if (result.song) {
-      const converted = convertTabxToEvents(result.song);
+      const converted = tabxSongToEvents(result.song);
       setParsedSong(result.song);
       setPreview({
         title: result.song.meta.title,
@@ -68,7 +74,7 @@ const ImportTabxModal: React.FC<ImportTabxModalProps> = ({ isOpen, onClose, onIm
 
   const confirmImport = () => {
     if (!parsedSong) return;
-    onImport(parsedSong, convertTabxToEvents(parsedSong));
+    onImport(parsedSong, tabxSongToEvents(parsedSong));
     onClose();
   };
 
@@ -97,6 +103,15 @@ const ImportTabxModal: React.FC<ImportTabxModalProps> = ({ isOpen, onClose, onIm
                 <li>Sections: {preview.sections}</li>
                 <li>Total bars: {preview.bars}</li>
                 <li>Total notes: {preview.notes}</li>
+              </ul>
+            )}
+            {warningText.length > 0 && (
+              <ul className="space-y-2 max-h-28 overflow-auto text-xs text-yellow-300 mb-3">
+                {warningText.map((warn, idx) => (
+                  <li key={`${warn.line}-${idx}`}>
+                    L{warn.line}:C{warn.column} {warn.message}
+                  </li>
+                ))}
               </ul>
             )}
             {errorText.length > 0 ? (
