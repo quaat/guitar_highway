@@ -33,6 +33,7 @@ const stripInlineComment = (line: string): string => {
 };
 
 const isEmptyOrComment = (line: string): boolean => stripInlineComment(line).trim().length === 0;
+const isKeywordLine = (line: string): boolean => /^\s*[A-Za-z][\w-]*:\s*/.test(line);
 
 const parseMetaBlock = (lines: string[], startAt: number, diagnostics: ParseDiagnostic[]): { meta: TabxMeta; i: number } => {
   const meta: TabxMeta = { ...DEFAULT_META };
@@ -236,12 +237,12 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
       const trimmed = row.trim();
       if (!trimmed) {
         i += 1;
-        if (i < lines.length && /^\s*(rhythm:|tab:|meta:)/.test(stripInlineComment(lines[i]))) {
+        if (i < lines.length && isKeywordLine(stripInlineComment(lines[i]).trim())) {
           break;
         }
         continue;
       }
-      if (/^\s*(rhythm:|tab:|meta:)/.test(trimmed)) break;
+      if (isKeywordLine(trimmed)) break;
       const match = row.match(/^\s*([A-Za-z])\|(.*)$/);
       if (!match) {
         i += 1;
@@ -253,7 +254,8 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
         i += 1;
         continue;
       }
-      stringLines.set(normalized, match[2]);
+      const previous = stringLines.get(normalized) ?? "";
+      stringLines.set(normalized, `${previous}${match[2]}`);
       i += 1;
     }
 

@@ -79,6 +79,37 @@ rhythm:
     },
   },
   {
+    name: 'concatenates multi-line ascii tab groups until next keyword section',
+    run: () => {
+      const groupA = `e|--------------15----14-----|--------------15----14-----|
+B|-----15--------------------|-----15--------------------|
+G|--------14-12----14----14--|--------14-12----14----14--|
+D|--12-----------------------|--12-----------------------|
+A|---------------------------|---------------------------|
+E|---------------------------|---------------------------|`;
+      const source = `TABX 2
+
+meta:
+  title: Imported Tab
+  bpm: 120
+  time: 4/4
+  tuning: E2 A2 D3 G3 B3 E4
+  capo: 0
+
+tab: Main
+
+${Array.from({ length: 10 }, () => groupA).join('\\n\\n')}
+
+rhythm:
+  resolution: 16
+  bars: [${Array.from({ length: 20 }, () => '16').join(',')}]
+`;
+      const out = parseTabx2Ascii(source);
+      assert(out.song, 'song exists');
+      assert(out.song!.sections[0].bars.length === 20, 'should parse all concatenated bars');
+    },
+  },
+  {
     name: 'events conversion uses slot timing',
     run: () => {
       const out = parseTabx2Ascii(valid);
