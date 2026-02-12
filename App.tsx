@@ -44,11 +44,19 @@ const App: React.FC = () => {
   const [songMeta, setSongMeta] = useState<SongMeta>(DEFAULT_META);
   const [importedSong, setImportedSong] = useState<TabxSong | null>(null);
 
-  const { isPlaying, isStarting, playheadRef, start, pause, reset, resetToken } = usePlayback();
+  const { isPlaying, playheadRef, togglePlay, reset, resetToken } = usePlayback();
   const [notes, setNotes] = useState<NoteEvent[]>(() => generateDemoSong());
   const backingTrackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const delayedAudioStartRef = useRef<number>();
 
   useNoteScheduler({ notes, isPlaying, playheadRef, outputDevice: audioDevice, resetToken });
+
+  const clearPendingAudioStart = () => {
+    if (delayedAudioStartRef.current) {
+      window.clearTimeout(delayedAudioStartRef.current);
+      delayedAudioStartRef.current = undefined;
+    }
+  };
 
   useEffect(() => {
     const existing = backingTrackAudioRef.current;
@@ -68,6 +76,7 @@ const App: React.FC = () => {
     backingTrackAudioRef.current = audio;
 
     return () => {
+      clearPendingAudioStart();
       audio.pause();
       audio.src = '';
       if (backingTrackAudioRef.current === audio) {
@@ -100,30 +109,33 @@ const App: React.FC = () => {
   }, [songMeta, importedSong]);
 
   const handleTogglePlay = () => {
-    if (isPlaying || isStarting) {
-      pause();
-      const audio = backingTrackAudioRef.current;
+    const audio = backingTrackAudioRef.current;
+
+    if (isPlaying) {
+      clearPendingAudioStart();
       if (audio) {
         audio.pause();
       }
+      togglePlay();
       return;
     }
 
+    togglePlay();
+
+    if (!audio) return;
+
     const delayMs = Math.max(0, songMeta.playbackDelayMs || 0);
-    start({
-      delayMs,
-      onStart: () => {
-        const audio = backingTrackAudioRef.current;
-        if (!audio) return;
-        audio.currentTime = 0;
-        void audio.play().catch(() => {
-          // keep note playback active even if browser blocks audio playback
-        });
-      },
-    });
+    delayedAudioStartRef.current = window.setTimeout(() => {
+      delayedAudioStartRef.current = undefined;
+      audio.currentTime = 0;
+      void audio.play().catch(() => {
+        // keep note visualization active even if browser blocks audio playback
+      });
+    }, delayMs);
   };
 
   const handleReset = () => {
+    clearPendingAudioStart();
     reset();
     const audio = backingTrackAudioRef.current;
     if (audio) {
