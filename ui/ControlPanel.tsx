@@ -61,6 +61,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <input className="bg-gray-800 rounded p-2" type="number" value={songMeta.bpm} onChange={(e) => handleMeta('bpm', Number(e.target.value))} />
             <input className="bg-gray-800 rounded p-2" type="number" value={songMeta.capo} onChange={(e) => handleMeta('capo', Number(e.target.value))} />
           </div>
+          <input className="w-full bg-gray-800 rounded p-2" placeholder="Backing track URL (.webm or .m4a)" value={songMeta.backingtrack ?? ''} onChange={(e) => handleMeta('backingtrack', e.target.value || undefined)} />
+          <input className="w-full bg-gray-800 rounded p-2" type="number" min={0} placeholder="Playback delay (ms)" value={songMeta.playbackDelayMs} onChange={(e) => handleMeta('playbackDelayMs', Math.max(0, Number(e.target.value) || 0))} />
           <input className="w-full bg-gray-800 rounded p-2" placeholder="time sig e.g. 4/4" value={`${songMeta.timeSig.num}/${songMeta.timeSig.den}`} onChange={(e) => {
             const m = e.target.value.match(/^(\d+)\/(\d+)$/);
             if (m) handleMeta('timeSig', { num: Number(m[1]), den: Number(m[2]) });

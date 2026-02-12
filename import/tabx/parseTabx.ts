@@ -2,6 +2,7 @@ import { ParseDiagnostic, ParseError, PitchName, TabxBar, TabxMeta, TabxNoteCell
 
 const DEFAULT_META: TabxMeta = {
   bpm: 120,
+  playbackDelayMs: 0,
   timeSig: { num: 4, den: 4 },
   tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'],
   capo: 0,
@@ -68,9 +69,9 @@ const parseMetaBlock = (lines: string[], startAt: number, diagnostics: ParseDiag
 
     const key = content.slice(0, colonIdx).trim();
     const value = content.slice(colonIdx + 1).trim();
-    if (key === 'title' || key === 'artist') {
+    if (key === 'title' || key === 'artist' || key === 'backingtrack') {
       (meta as any)[key] = value;
-    } else if (key === 'bpm' || key === 'capo' || key === 'resolution') {
+    } else if (key === 'bpm' || key === 'capo' || key === 'resolution' || key === 'playbackDelayMs') {
       const parsed = Number(value);
       if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
         addError(i + 1, colonIdx + 4, `${key} must be an integer.`);

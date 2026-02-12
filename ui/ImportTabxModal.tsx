@@ -17,6 +17,8 @@ meta:
   time: 4/4
   tuning: E2 A2 D3 G3 B3 E4
   capo: 0
+  backingtrack: ./backing-track.webm
+  playbackDelayMs: 750
 
 tab: Intro
 e|-----0------|-----0------|

@@ -13,6 +13,8 @@ meta:
   time: 4/4
   tuning: E2 A2 D3 G3 B3 E4
   capo: 0
+  backingtrack: ./backing.webm
+  playbackDelayMs: 500
 
 tab: Intro
 e|--5h7---10b12--12*--|
@@ -34,6 +36,8 @@ const tests: Array<{ name: string; run: () => void }> = [
       const out = parseTabx2Ascii(valid);
       assert(out.errors.length === 0, 'should parse');
       assert(out.song?.sections.length === 1, 'section count');
+      assert(out.song?.meta.backingtrack === './backing.webm', 'backing track parsed');
+      assert(out.song?.meta.playbackDelayMs === 500, 'playback delay parsed');
     },
   },
   {
