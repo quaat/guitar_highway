@@ -10,7 +10,6 @@ const INLAY_FRETS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
 const DOUBLE_INLAYS = [12, 24];
 
 const GRID_OPACITY = 0.18;
-const GUIDE_OPACITY = 0.45;
 const FRET_THICKNESS = 0.09;
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -281,8 +280,12 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
           const pos = worldPositionForEvent(fretProbeEvent, 0, config);
 
           return (
-            <mesh key={`lane-glow-${fret}`} position={[pos.x, 0, -viewDistance / 2 + 0.03]}>
-              <boxGeometry args={[fretSpacing, height, viewDistance]} />
+            <mesh
+              key={`lane-glow-${fret}`}
+              position={[pos.x, -height / 2 + 0.01, -viewDistance / 2 + 0.03]}
+              rotation={[-Math.PI / 2, 0, 0]}
+            >
+              <planeGeometry args={[fretSpacing, viewDistance]} />
               <meshBasicMaterial
                 ref={(material) => {
                   laneGlowMaterialRefs.current[laneIndex] = material;
@@ -299,7 +302,7 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
 
       <HighwayGuideLines
         config={config}
-        guideOpacity={GUIDE_OPACITY}
+        guideOpacity={0}
         guideLengthZ={viewDistance}
         lowerEdgeY={-height / 2}
       />
