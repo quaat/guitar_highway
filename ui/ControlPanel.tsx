@@ -101,22 +101,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             </div>
             <input type="range" min="50" max="300" step="10" value={config.viewDistance} onChange={(e) => handleChange('viewDistance', Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
           </div>
-
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="flex items-center gap-1"><Eye size={12} />Landing Fade Timing</span>
-              <span className="text-gray-400">{(config.noteFadeLeadTimeSec ?? 2).toFixed(2)}s</span>
-            </div>
-            <input type="range" min="0.5" max="3.5" step="0.05" value={config.noteFadeLeadTimeSec ?? 2} onChange={(e) => handleChange('noteFadeLeadTimeSec', Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-          </div>
-
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="flex items-center gap-1"><Eye size={12} />Note Box Visibility</span>
-              <span className="text-gray-400">{(config.noteBoxOpacity ?? 0.2).toFixed(3)}</span>
-            </div>
-            <input type="range" min="0" max="0.2" step="0.005" value={config.noteBoxOpacity ?? 0.2} onChange={(e) => handleChange('noteBoxOpacity', Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-          </div>
         </div>
       </div>
     </div>

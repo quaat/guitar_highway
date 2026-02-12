@@ -30,8 +30,6 @@ export interface HighwayConfig {
   laneGlowDistance?: number;
   maxStringGlowIntensity?: number;
   maxLaneGlowIntensity?: number;
-  noteFadeLeadTimeSec?: number;
-  noteBoxOpacity?: number;
 }
 
 export interface CameraConfig {
