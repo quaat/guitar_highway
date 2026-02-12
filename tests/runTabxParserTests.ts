@@ -57,6 +57,28 @@ const tests: Array<{ name: string; run: () => void }> = [
     },
   },
   {
+    name: 'three-bar ascii block keeps all three bars',
+    run: () => {
+      const source = `TABX 2
+
+tab: Intro
+e|-----0------|-----0------|-----1------|
+B|-----1------|-----0------|-----0------|
+G|-----0------|-----0------|-----0------|
+D|-----2------|-----2------|-----0------|
+A|-----3------|-----3------|-----3------|
+E|------------|------------|-----1------|
+
+rhythm:
+  resolution: 16
+  bars: [16, 16, 16]
+`;
+      const out = parseTabx2Ascii(source);
+      assert(out.song, 'song exists');
+      assert(out.song!.sections[0].bars.length === 3, 'should preserve 3 bars');
+    },
+  },
+  {
     name: 'events conversion uses slot timing',
     run: () => {
       const out = parseTabx2Ascii(valid);

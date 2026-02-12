@@ -132,7 +132,7 @@ const tokenizeStringContent = (content: string, stringIndex: number): Array<Tabx
     const fretMatch = content.slice(idx).match(/^(\d{1,2})/);
     if (fretMatch) {
       const fret = Number(fretMatch[1]);
-      const note: TabxNoteCell & { bar: number } = { stringIndex, col: cursor, fret, techniques: [], bar: Math.max(0, bar - 1) };
+      const note: TabxNoteCell & { bar: number } = { stringIndex, col: cursor, fret, techniques: [], bar };
       notes.push(note);
       previousNote = note;
       cursor += fretMatch[1].length;
@@ -148,7 +148,7 @@ const tokenizeStringContent = (content: string, stringIndex: number): Array<Tabx
           col: cursor,
           fret: 0,
           techniques: [{ symbol: 'x', text: 'muted' }],
-          bar: Math.max(0, bar - 1),
+          bar,
         };
         notes.push(muted);
         previousNote = muted;
