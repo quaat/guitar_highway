@@ -7,6 +7,20 @@ export interface NoteEvent {
   color?: string;
 }
 
+export type NoteLifecycleState = 'incoming' | 'atHitLine' | 'expired';
+
+export interface RuntimeNoteState {
+  id: string;
+  state: NoteLifecycleState;
+  hitAtTime?: number;
+  expiresAtTime?: number;
+}
+
+export interface HitVisualConfig {
+  emissiveBoost?: number;
+  pulse?: boolean;
+}
+
 export interface HighwayConfig {
   fretSpacing: number;
   stringSpacing: number;
@@ -14,6 +28,9 @@ export interface HighwayConfig {
   viewDistance: number;
   laneWidth: number;   // Visual width of the highway
   laneHeight: number;  // Visual height of the highway
+  hitLineZ: number;
+  hitHoldMs: number;
+  hitVisual?: HitVisualConfig;
 }
 
 export interface CameraConfig {
@@ -23,24 +40,18 @@ export interface CameraConfig {
 }
 
 export const STRING_COLORS = [
-  '#ef4444', // 1: Red (Low E - wait, usually 6 is Low E in tabs, but Rocksmith flips visual)
-             // Let's stick to standard Rocksmith-like:
-             // E (Red), A (Yellow), D (Blue), G (Orange), B (Green), e (Purple)
-             // We will map index 1-6 to these.
-             // Let's assume String 6 is Low E (Thickest) -> Red
-  '#9333ea', // 1 e (High) - Purple
-  '#22c55e', // 2 B - Green
-  '#f97316', // 3 G - Orange
-  '#3b82f6', // 4 D - Blue
-  '#eab308', // 5 A - Yellow
-  '#ef4444', // 6 E (Low) - Red
+  '#ef4444',
+  '#9333ea',
+  '#22c55e',
+  '#f97316',
+  '#3b82f6',
+  '#eab308',
+  '#ef4444',
 ];
 
-// Map 1-based string index to color
 export const getStringColor = (strIndex: number): string => {
-  // Clamp 1-6
   const idx = Math.max(1, Math.min(6, strIndex));
-  return STRING_COLORS[idx]; // 0 is unused in this mapping if we want to match string numbers directly, let's fix array
+  return STRING_COLORS[idx];
 };
 
 export const STRING_COLORS_MAP: Record<number, string> = {

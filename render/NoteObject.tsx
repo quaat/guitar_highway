@@ -1,57 +1,70 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Mesh, Vector3 } from 'three';
-import { NoteEvent, HighwayConfig, STRING_COLORS_MAP } from '../types';
-import { worldPositionForEvent } from '../domain/mapping';
+import { Mesh, MeshStandardMaterial } from 'three';
+import { HighwayConfig, NoteEvent, RuntimeNoteState, STRING_COLORS_MAP } from '../types';
+import { clampedNoteDepth, noteDepthForTime } from '../domain/noteLifecycle';
 
 interface NoteObjectProps {
   note: NoteEvent;
   playheadRef: React.MutableRefObject<number>;
+  runtimeStatesRef: React.MutableRefObject<Map<string, RuntimeNoteState>>;
   config: HighwayConfig;
 }
 
-const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) => {
+const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, runtimeStatesRef, config }) => {
   const meshRef = useRef<Mesh>(null);
-  
-  // Memoize static geometry props if needed, but here simple args are fine.
-  // We calculate static X/Y once to avoid recalculating everything.
-  // Actually, worldPositionForEvent does X/Y/Z. We can optimize.
-  
+  const materialRef = useRef<MeshStandardMaterial>(null);
+
   const color = useMemo(() => STRING_COLORS_MAP[note.string] || '#fff', [note.string]);
-  
-  // Reuse Vector3 to avoid GC
-  const posVec = useMemo(() => new Vector3(), []);
 
-  useFrame(() => {
-    if (!meshRef.current) return;
+  useFrame(({ clock }) => {
+    if (!meshRef.current || !materialRef.current) return;
 
-    // Calculate Z dynamically
-    // We could optimize by only calculating Z, but the mapping function is cheap.
-    // Let's manually do Z for perf:
-    // const z = -(note.time - playheadRef.current) * config.speed;
-    
-    // Using the shared domain function ensures consistency
-    const targetPos = worldPositionForEvent(note, playheadRef.current, config);
-    
-    meshRef.current.position.copy(targetPos);
+    const runtime = runtimeStatesRef.current.get(note.id);
 
-    // Visibility culling (optimization)
-    // If it's too far or behind camera, we could scale it to 0 or hide it
-    // Drei's <Instances> handles frustum culling better, but manual is fine for MVP.
-    const dist = targetPos.z;
-    const visible = dist < 5 && dist > -(config.viewDistance + 20);
-    meshRef.current.visible = visible;
+    if (!runtime || runtime.state === 'expired') {
+      meshRef.current.visible = false;
+      return;
+    }
+
+    meshRef.current.visible = true;
+
+    const rawZ = noteDepthForTime(note.time, playheadRef.current, config.speed);
+    const z = runtime.state === 'atHitLine' ? config.hitLineZ : clampedNoteDepth(rawZ, config.hitLineZ);
+
+    meshRef.current.position.set(
+      (note.fret - 12.5) * config.fretSpacing,
+      (note.string - 3.5) * config.stringSpacing,
+      z,
+    );
+
+    if (runtime.state === 'atHitLine') {
+      const pulseEnabled = config.hitVisual?.pulse ?? true;
+      const pulseScale = pulseEnabled ? 1 + Math.sin(clock.elapsedTime * 28) * 0.06 : 1;
+      meshRef.current.scale.setScalar(pulseScale);
+
+      materialRef.current.emissive.set(color);
+      materialRef.current.emissiveIntensity = config.hitVisual?.emissiveBoost ?? 1.2;
+      materialRef.current.roughness = 0.2;
+      materialRef.current.metalness = 0.2;
+      return;
+    }
+
+    meshRef.current.scale.setScalar(1);
+    materialRef.current.emissive.set('#000000');
+    materialRef.current.emissiveIntensity = 0;
+    materialRef.current.roughness = 0.3;
+    materialRef.current.metalness = 0.1;
   });
 
-  // Calculate dimensions based on spacing to fit in lane
   const width = config.fretSpacing * 0.8;
   const height = config.stringSpacing * 0.6;
-  const depth = 0.5; // Fixed thickness
+  const depth = 0.5;
 
   return (
     <mesh ref={meshRef}>
       <boxGeometry args={[width, height, depth]} />
-      <meshStandardMaterial color={color} roughness={0.3} metalness={0.1} />
+      <meshStandardMaterial ref={materialRef} color={color} roughness={0.3} metalness={0.1} />
     </mesh>
   );
 };
