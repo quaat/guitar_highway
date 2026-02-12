@@ -100,7 +100,7 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
              <Text
                 position={[0, -height/2 - 0.5, 0]}
                 fontSize={0.4}
-                color="#666"
+                color="#bfc5d2"
                 anchorY="top"
              >
                {fret}
@@ -109,17 +109,17 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
                  <>
                    <mesh position={[0, height/4, 0]}>
                      <circleGeometry args={[0.15, 16]} />
-                     <meshBasicMaterial color="#333" />
+                     <meshBasicMaterial color="#d6dbe5" />
                    </mesh>
                     <mesh position={[0, -height/4, 0]}>
                      <circleGeometry args={[0.15, 16]} />
-                     <meshBasicMaterial color="#333" />
+                     <meshBasicMaterial color="#d6dbe5" />
                    </mesh>
                  </>
               ) : (
                  <mesh>
                      <circleGeometry args={[0.15, 16]} />
-                     <meshBasicMaterial color="#333" />
+                     <meshBasicMaterial color="#d6dbe5" />
                  </mesh>
               )}
           </group>
