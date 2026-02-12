@@ -42,3 +42,21 @@ rhythm:
 Each bar has `resolution` slots. Unique note column groups are mapped into slots in order.
 
 If `rhythm:` is missing, timing is approximated and a warning is emitted.
+
+
+## Common rhythm pitfall (important)
+
+If you omit `rhythm:`, TABX 2 intentionally **does not** infer exact timing from ASCII spacing.
+The importer approximates timing from note-group order within each bar, which may sound uneven between bars when note counts/grouping differ.
+
+For steady streams (for example, constant eighth notes in a riff), you should provide an explicit rhythm grid.
+
+Example for 20 bars of straight eighth notes in 4/4:
+
+```yaml
+rhythm:
+  resolution: 8
+  bars: [8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8]
+```
+
+Also note: if your `tab:` starts with empty bars (e.g. `e|-------|----------|` etc.), those bars are imported as silence by design. Remove them if you do not want a pause before notes start.

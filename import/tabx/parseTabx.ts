@@ -322,7 +322,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
     }
 
     if (!rhythmBars && !rhythmResolution) {
-      addWarning(sourceStartLine + 1, 1, `Section "${name}" has no rhythm block. Timing will be approximated.`);
+      addWarning(sourceStartLine + 1, 1, `Section "${name}" has no rhythm block. Timing is approximated from note-column groups and can sound uneven; add an explicit rhythm: block for deterministic eighth/16th-note timing.`);
     }
 
     sections.push({ name, bars });
