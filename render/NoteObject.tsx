@@ -10,7 +10,7 @@ interface NoteObjectProps {
   config: HighwayConfig;
 }
 
-const PREVIEW_LEAD_TIME_SEC = 2.0;
+const DEFAULT_PREVIEW_LEAD_TIME_SEC = 2.0;
 const PREVIEW_Z = 0.02;
 const PREVIEW_FADE_OUT_SEC = 0.15;
 
@@ -85,11 +85,13 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     }
 
     if (previewMeshRef.current && previewMaterialRef.current) {
-      const previewVisible = timeUntilHit <= PREVIEW_LEAD_TIME_SEC && timeUntilHit >= -PREVIEW_FADE_OUT_SEC;
+      const previewLeadTimeSec = config.noteFadeLeadTimeSec ?? DEFAULT_PREVIEW_LEAD_TIME_SEC;
+      const noteBoxOpacity = config.noteBoxOpacity ?? 0.2;
+      const previewVisible = timeUntilHit <= previewLeadTimeSec && timeUntilHit >= -PREVIEW_FADE_OUT_SEC;
 
       let previewOpacity = 0;
       if (timeUntilHit >= 0) {
-        const t = clamp(1 - timeUntilHit / PREVIEW_LEAD_TIME_SEC, 0, 1);
+        const t = clamp(1 - timeUntilHit / previewLeadTimeSec, 0, 1);
         // Smoothstep eases in/out so the ghost note fades naturally.
         previewOpacity = smoothstep(t);
       } else {
@@ -97,7 +99,7 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
         previewOpacity = 1 - fadeOut;
       }
 
-      previewMaterialRef.current.opacity = previewOpacity;
+      previewMaterialRef.current.opacity = previewOpacity * noteBoxOpacity;
       previewMeshRef.current.visible = previewVisible;
     }
   });
