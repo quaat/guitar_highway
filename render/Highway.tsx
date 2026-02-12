@@ -132,7 +132,7 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
         {/* Transparent Board Surface */}
         <mesh position={[0, 0, -viewDistance/2]}>
             <boxGeometry args={[width, height, viewDistance]} />
-            <meshBasicMaterial color="#0f0f12" transparent opacity={0.7} side={THREE.DoubleSide} depthWrite={false} />
+            <meshBasicMaterial color="#0f0f12" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
         </mesh>
         
         {fretLines}
@@ -144,9 +144,15 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
             points={[
                 [-width/2, -height/2, 0],
                 [width/2, -height/2, 0],
-                [width/2, height/2, 0],
+                [width/2, height/2, 0]
+            ]}
+            color="white"
+            lineWidth={2}
+        />
+        <Line
+            points={[
+                [-width/2, -height/2, 0],
                 [-width/2, height/2, 0],
-                [-width/2, -height/2, 0]
             ]}
             color="white"
             lineWidth={2}
