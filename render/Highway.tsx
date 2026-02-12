@@ -33,9 +33,9 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
              [x, -height/2, -viewDistance],
              [x, -height/2, 0]
           ]}
-          color="#333"
-          lineWidth={1}
-          opacity={0.15}
+          color="#7a7a7a"
+          lineWidth={1.5}
+          opacity={0.35}
           transparent
         />
       );
@@ -54,8 +54,8 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
             <Line
               points={[[-width/2, y, 0], [width/2, y, 0]]}
               color={color}
-              lineWidth={2}
-              opacity={0.8}
+              lineWidth={3.5}
+              opacity={0.95}
               transparent
             />
             {/* String Line at Far Distance */}
@@ -63,7 +63,7 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
               points={[[-width/2, y, -viewDistance], [width/2, y, -viewDistance]]}
               color={color}
               lineWidth={2}
-              opacity={0.2}
+              opacity={0.35}
               transparent
             />
             {/* Connecting Lines at Edges (Visual guide for depth) */}

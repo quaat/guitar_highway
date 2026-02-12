@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Mesh, Vector3 } from 'three';
+import { Mesh, MeshStandardMaterial, Vector3 } from 'three';
 import { NoteEvent, HighwayConfig, STRING_COLORS_MAP } from '../types';
 import { worldPositionForEvent } from '../domain/mapping';
 
@@ -12,6 +12,7 @@ interface NoteObjectProps {
 
 const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) => {
   const meshRef = useRef<Mesh>(null);
+  const materialRef = useRef<MeshStandardMaterial>(null);
   
   // Memoize static geometry props if needed, but here simple args are fine.
   // We calculate static X/Y once to avoid recalculating everything.
@@ -35,11 +36,28 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     
     meshRef.current.position.copy(targetPos);
 
-    // Visibility culling (optimization)
-    // If it's too far or behind camera, we could scale it to 0 or hide it
-    // Drei's <Instances> handles frustum culling better, but manual is fine for MVP.
+    const elapsed = playheadRef.current - note.time;
+    const popProgress = Math.max(0, Math.min(1, elapsed / 0.12));
+
+    if (elapsed >= 0 && elapsed <= 0.12) {
+      const glow = (1 - popProgress) * 2.4;
+      const scale = 1 + (1 - popProgress) * 0.45;
+      meshRef.current.scale.set(scale, scale, scale);
+
+      if (materialRef.current) {
+        materialRef.current.emissive.set(color);
+        materialRef.current.emissiveIntensity = glow;
+      }
+    } else {
+      meshRef.current.scale.set(1, 1, 1);
+
+      if (materialRef.current) {
+        materialRef.current.emissiveIntensity = 0;
+      }
+    }
+
     const dist = targetPos.z;
-    const visible = dist < 5 && dist > -(config.viewDistance + 20);
+    const visible = dist < 0.6 && dist > -(config.viewDistance + 20);
     meshRef.current.visible = visible;
   });
 
@@ -51,7 +69,7 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
   return (
     <mesh ref={meshRef}>
       <boxGeometry args={[width, height, depth]} />
-      <meshStandardMaterial color={color} roughness={0.3} metalness={0.1} />
+      <meshStandardMaterial ref={materialRef} color={color} roughness={0.3} metalness={0.1} />
     </mesh>
   );
 };
