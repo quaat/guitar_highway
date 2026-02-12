@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { HighwayConfig, STRING_COLORS_MAP } from '../types';
 import { Line, Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -9,7 +9,6 @@ const DOUBLE_INLAYS = [12, 24];
 
 const GRID_OPACITY = 0.18;
 const GUIDE_OPACITY = 0.45;
-const GUIDE_LENGTH_FACTOR = 0.28;
 const FRET_THICKNESS = 0.09;
 
 interface HighwayProps {
@@ -152,6 +151,39 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
     });
   }, [fretSpacing, height]);
 
+  useEffect(() => {
+    const highwayBox = {
+      min: {
+        x: -width / 2,
+        y: -height / 2,
+        z: -viewDistance,
+      },
+      max: {
+        x: width / 2,
+        y: height / 2,
+        z: 0,
+      },
+    };
+
+    const laneGuides = {
+      min: {
+        x: -width / 2,
+        y: -height / 2,
+        z: -viewDistance,
+      },
+      max: {
+        x: width / 2,
+        y: -height / 2,
+        z: 0.03,
+      },
+    };
+
+    console.debug('[Highway] Extents', {
+      highwayBox,
+      laneGuides,
+    });
+  }, [height, viewDistance, width]);
+
   // Existing objects kept intact; only material visibility is tuned.
   // Added overlays: near-hit fret strips + lower-depth highway guides.
   return (
@@ -175,7 +207,7 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
       <HighwayGuideLines
         config={config}
         guideOpacity={GUIDE_OPACITY}
-        guideLengthZ={viewDistance * GUIDE_LENGTH_FACTOR}
+        guideLengthZ={viewDistance}
         lowerEdgeY={-height / 2}
       />
 

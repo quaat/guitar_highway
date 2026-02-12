@@ -46,11 +46,6 @@ const Scene: React.FC<SceneProps> = ({ notes, playheadRef, config }) => {
           ))}
         </group>
 
-        {/* Simple grid helper at the "bottom" just for orientation reference */}
-        <gridHelper 
-          args={[100, 100, 0x222222, 0x111111]} 
-          position={[0, -5, -50]} 
-        />
       </Suspense>
     </Canvas>
   );
