@@ -7,17 +7,19 @@ interface HighwayGuideLinesProps {
   config: HighwayConfig;
   guideOpacity: number;
   guideLengthZ: number;
+  lowerEdgeY: number;
 }
 
 /**
- * Added overlay-only guide lines: one per string lane.
- * Alignment is derived from existing worldPositionForEvent mapping so lane Y positions
- * exactly match note placement at the hit line.
+ * Added overlay-only guide lines: one per fret (1..24).
+ * X alignment is derived from existing worldPositionForEvent mapping using dummy hit-time
+ * events so the fret position matches note mapping logic exactly.
  */
 export const HighwayGuideLines: React.FC<HighwayGuideLinesProps> = ({
   config,
   guideOpacity,
   guideLengthZ,
+  lowerEdgeY,
 }) => {
   const guideSegments = useMemo(() => {
     const playheadTime = 0;
@@ -25,28 +27,25 @@ export const HighwayGuideLines: React.FC<HighwayGuideLinesProps> = ({
     const zStart = 0.03; // Small offset above hit plane to reduce z-fighting.
     const zEnd = -guideLengthZ;
 
-    return Array.from({ length: 6 }, (_, index) => {
-      const string = index + 1;
-      const laneProbeEvent: NoteEvent = {
-        id: `guide-lane-${string}`,
-        string,
-        fret: 12,
+    return Array.from({ length: 24 }, (_, index) => {
+      const fret = index + 1;
+      const fretProbeEvent: NoteEvent = {
+        id: `guide-fret-${fret}`,
+        string: 1,
+        fret,
         time: hitTime,
       };
-      const lanePos = worldPositionForEvent(laneProbeEvent, playheadTime, config);
+      const fretPos = worldPositionForEvent(fretProbeEvent, playheadTime, config);
 
       return {
-        key: `guide-${string}`,
+        key: `fret-guide-${fret}`,
         points: [
-          [-12 * config.fretSpacing, lanePos.y, zStart],
-          [12 * config.fretSpacing, lanePos.y, zStart],
-          [12 * config.fretSpacing, lanePos.y, zEnd],
-          [-12 * config.fretSpacing, lanePos.y, zEnd],
-          [-12 * config.fretSpacing, lanePos.y, zStart],
+          [fretPos.x, lowerEdgeY, zStart],
+          [fretPos.x, lowerEdgeY, zEnd],
         ] as [number, number, number][],
       };
     });
-  }, [config, guideLengthZ]);
+  }, [config, guideLengthZ, lowerEdgeY]);
 
   return (
     <group renderOrder={4}>

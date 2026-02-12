@@ -176,6 +176,7 @@ export const Highway: React.FC<HighwayProps> = ({ config }) => {
         config={config}
         guideOpacity={GUIDE_OPACITY}
         guideLengthZ={viewDistance * GUIDE_LENGTH_FACTOR}
+        lowerEdgeY={-height / 2}
       />
 
       {fretOverlays}
