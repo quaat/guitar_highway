@@ -36,8 +36,18 @@ export interface HighwayConfig {
 
 export interface CameraConfig {
   fov: number;
+  near: number;
+  far: number;
   position: [number, number, number];
   target: [number, number, number];
+  rotationEuler?: [number, number, number];
+  damping?: number;
+  transitionMs?: number;
+}
+
+export interface CameraSnapshot {
+  name: string;
+  config: CameraConfig;
 }
 
 export const STRING_COLORS = [

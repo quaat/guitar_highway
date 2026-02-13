@@ -1,5 +1,5 @@
 import { NoteEvent, STRING_COLORS_MAP } from '../../types';
-import { PitchName, TabxSong } from './types';
+import { CameraConfig, PitchName, TabxSong } from './types';
 
 const NOTE_TO_SEMITONE: Record<string, number> = {
   C: 0,
@@ -18,19 +18,12 @@ const NOTE_TO_SEMITONE: Record<string, number> = {
 
 export const pitchNameToMidi = (pitch: PitchName): number => {
   const match = pitch.match(/^([A-G]#?)(\d+)$/);
-  if (!match) {
-    throw new Error(`Invalid pitch format: ${pitch}`);
-  }
+  if (!match) throw new Error(`Invalid pitch format: ${pitch}`);
   const [, note, octaveStr] = match;
   return (Number(octaveStr) + 1) * 12 + NOTE_TO_SEMITONE[note];
 };
 
-export const midiFromStringFret = (
-  tuning: PitchName[],
-  capo: number,
-  stringIndexHighToLow: number,
-  fret: number,
-): number => {
+export const midiFromStringFret = (tuning: PitchName[], capo: number, stringIndexHighToLow: number, fret: number): number => {
   const lowToHighIndex = 5 - stringIndexHighToLow;
   const openMidi = pitchNameToMidi(tuning[lowToHighIndex]);
   return openMidi + capo + fret;
@@ -41,16 +34,23 @@ export interface ConvertedSong {
   totalBars: number;
   totalNotes: number;
   tempoMap?: Array<{ timeSec: number; bpm: number }>;
+  cameraDefaults?: CameraConfig;
+  cameraTimeline?: Array<{ timeSec: number; config: Partial<CameraConfig> }>;
 }
 
 export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
   const notes: NoteEvent[] = [];
+  const cameraTimeline: Array<{ timeSec: number; config: Partial<CameraConfig> }> = [];
   const { bpm: defaultBpm, timeSig, tuning, capo, resolution } = song.meta;
   const tempoMap: Array<{ timeSec: number; bpm: number }> = [];
   const quartersPerBar = timeSig.num * (4 / timeSig.den);
 
   let sectionStartSec = 0;
   let idCounter = 0;
+  let globalBarOffset = 0;
+
+  const cameraEvents = [...(song.camera?.events ?? [])].sort((a, b) => (a.at.bar === b.at.bar ? a.at.slot - b.at.slot : a.at.bar - b.at.bar));
+  let cameraEventIndex = 0;
 
   song.sections.forEach((section) => {
     const slotTimes = new Map<string, number>();
@@ -62,9 +62,7 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     let currentBpm = defaultBpm;
     let elapsedInSectionSec = 0;
 
-    if (tempoByPosition.has('0:0')) {
-      currentBpm = tempoByPosition.get('0:0')!;
-    }
+    if (tempoByPosition.has('0:0')) currentBpm = tempoByPosition.get('0:0')!;
     tempoMap.push({ timeSec: sectionStartSec, bpm: currentBpm });
 
     section.bars.forEach((bar, barIdx) => {
@@ -80,7 +78,18 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
             tempoMap.push({ timeSec: sectionStartSec + elapsedInSectionSec, bpm: currentBpm });
           }
         }
-        slotTimes.set(key, sectionStartSec + elapsedInSectionSec);
+
+        const absTime = sectionStartSec + elapsedInSectionSec;
+        slotTimes.set(key, absTime);
+
+        const globalBar = globalBarOffset + barIdx;
+        while (cameraEventIndex < cameraEvents.length) {
+          const nextEvent = cameraEvents[cameraEventIndex];
+          if (nextEvent.at.bar !== globalBar || nextEvent.at.slot !== slot) break;
+          cameraTimeline.push({ timeSec: absTime, config: nextEvent.config });
+          cameraEventIndex += 1;
+        }
+
         elapsedInSectionSec += slotDurationForBpm(currentBpm);
       }
 
@@ -103,6 +112,7 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     });
 
     sectionStartSec += elapsedInSectionSec;
+    globalBarOffset += section.bars.length;
   });
 
   notes.sort((a, b) => a.time - b.time);
@@ -112,6 +122,8 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     totalBars: song.sections.reduce((sum, section) => sum + section.bars.length, 0),
     totalNotes: notes.length,
     tempoMap,
+    cameraDefaults: song.camera?.defaults,
+    cameraTimeline,
   };
 };
 

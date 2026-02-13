@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Scene from './render/Scene';
 import ControlPanel from './ui/ControlPanel';
 import { usePlayback } from './state/usePlayback';
-import { DEFAULT_HIGHWAY_CONFIG } from './constants';
+import { DEFAULT_CAMERA_CONFIG, DEFAULT_HIGHWAY_CONFIG } from './constants';
 import { generateDemoSong } from './domain/generator';
-import { HighwayConfig, NoteEvent, SongMeta } from './types';
+import { CameraConfig, CameraSnapshot, HighwayConfig, NoteEvent, SongMeta } from './types';
 import ImportTabxModal from './ui/ImportTabxModal';
 import { TabxSong } from './import/tabx/types';
 import { ConvertedSong, convertTabxToEvents } from './import/tabx/convertTabx';
@@ -40,14 +40,19 @@ const isSupportedBackingTrack = (path?: string): boolean => {
 
 const App: React.FC = () => {
   const [config, setConfig] = useState<HighwayConfig>(DEFAULT_HIGHWAY_CONFIG);
+  const [cameraConfig, setCameraConfig] = useState<CameraConfig>(DEFAULT_CAMERA_CONFIG);
+  const [cameraSnapshots, setCameraSnapshots] = useState<CameraSnapshot[]>([]);
+  const [lockScriptedCamera, setLockScriptedCamera] = useState(true);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [songMeta, setSongMeta] = useState<SongMeta>(DEFAULT_META);
   const [importedSong, setImportedSong] = useState<TabxSong | null>(null);
+  const [cameraTimeline, setCameraTimeline] = useState<Array<{ timeSec: number; config: Partial<CameraConfig> }>>([]);
 
   const { isPlaying, playheadRef, togglePlay, reset, resetToken } = usePlayback();
   const [notes, setNotes] = useState<NoteEvent[]>(() => generateDemoSong());
   const backingTrackAudioRef = useRef<HTMLAudioElement | null>(null);
   const delayedAudioStartRef = useRef<number>();
+  const cameraEventIndexRef = useRef(0);
 
   useNoteScheduler({ notes, isPlaying, playheadRef, outputDevice: audioDevice, resetToken });
 
@@ -66,9 +71,7 @@ const App: React.FC = () => {
       backingTrackAudioRef.current = null;
     }
 
-    if (!isSupportedBackingTrack(songMeta.backingtrack)) {
-      return;
-    }
+    if (!isSupportedBackingTrack(songMeta.backingtrack)) return;
 
     const audio = new Audio(songMeta.backingtrack);
     audio.preload = 'auto';
@@ -79,9 +82,7 @@ const App: React.FC = () => {
       clearPendingAudioStart();
       audio.pause();
       audio.src = '';
-      if (backingTrackAudioRef.current === audio) {
-        backingTrackAudioRef.current = null;
-      }
+      if (backingTrackAudioRef.current === audio) backingTrackAudioRef.current = null;
     };
   }, [songMeta.backingtrack]);
 
@@ -99,29 +100,56 @@ const App: React.FC = () => {
     });
     setImportedSong(song);
     setNotes(converted.notes);
+    setCameraTimeline(converted.cameraTimeline ?? []);
+    setCameraConfig(converted.cameraDefaults ?? DEFAULT_CAMERA_CONFIG);
+    cameraEventIndexRef.current = 0;
     reset();
   };
 
   useEffect(() => {
     if (!importedSong) return;
     const updated: TabxSong = { ...importedSong, meta: toTabxSongMeta(songMeta, importedSong.meta) };
-    setNotes(convertTabxToEvents(updated).notes);
+    const converted = convertTabxToEvents(updated);
+    setNotes(converted.notes);
+    setCameraTimeline(converted.cameraTimeline ?? []);
+    cameraEventIndexRef.current = 0;
   }, [songMeta, importedSong]);
+
+  useEffect(() => {
+    if (!isPlaying || !cameraTimeline.length) return;
+    let rafId = 0;
+
+    const applyDueCameraEvents = () => {
+      const currentPlayhead = playheadRef.current;
+      setCameraConfig((current) => {
+        let next = current;
+        let didUpdate = false;
+        while (cameraEventIndexRef.current < cameraTimeline.length && cameraTimeline[cameraEventIndexRef.current].timeSec <= currentPlayhead) {
+          const event = cameraTimeline[cameraEventIndexRef.current];
+          next = { ...next, ...event.config };
+          cameraEventIndexRef.current += 1;
+          didUpdate = true;
+        }
+        return didUpdate ? next : current;
+      });
+      rafId = requestAnimationFrame(applyDueCameraEvents);
+    };
+
+    rafId = requestAnimationFrame(applyDueCameraEvents);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, cameraTimeline, playheadRef]);
 
   const handleTogglePlay = () => {
     const audio = backingTrackAudioRef.current;
 
     if (isPlaying) {
       clearPendingAudioStart();
-      if (audio) {
-        audio.pause();
-      }
+      if (audio) audio.pause();
       togglePlay();
       return;
     }
 
     togglePlay();
-
     if (!audio) return;
 
     const delayMs = Math.max(0, songMeta.playbackDelayMs || 0);
@@ -137,6 +165,11 @@ const App: React.FC = () => {
   const handleReset = () => {
     clearPendingAudioStart();
     reset();
+    cameraEventIndexRef.current = 0;
+    if (cameraTimeline.length && importedSong) {
+      const converted = convertTabxToEvents(importedSong);
+      setCameraConfig(converted.cameraDefaults ?? DEFAULT_CAMERA_CONFIG);
+    }
     const audio = backingTrackAudioRef.current;
     if (audio) {
       audio.pause();
@@ -149,7 +182,14 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <Scene notes={notes} playheadRef={playheadRef} config={config} />
+        <Scene
+          notes={notes}
+          playheadRef={playheadRef}
+          config={config}
+          cameraConfig={cameraConfig}
+          onCameraConfigChange={setCameraConfig}
+          lockScriptedCamera={lockScriptedCamera}
+        />
       </div>
 
       <div className="absolute top-4 right-4 z-10 bg-black/70 px-3 py-2 rounded text-white text-sm border border-white/10">
@@ -167,6 +207,12 @@ const App: React.FC = () => {
         onOpenImport={() => setIsImportOpen(true)}
         songMeta={songMeta}
         onSongMetaChange={setSongMeta}
+        cameraConfig={cameraConfig}
+        onCameraConfigChange={setCameraConfig}
+        cameraSnapshots={cameraSnapshots}
+        onCameraSnapshotsChange={setCameraSnapshots}
+        lockScriptedCamera={lockScriptedCamera}
+        onLockScriptedCameraChange={setLockScriptedCamera}
       />
 
       <ImportTabxModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onImport={handleImport} />

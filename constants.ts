@@ -14,7 +14,11 @@ export const DEFAULT_HIGHWAY_CONFIG: HighwayConfig = {
 };
 
 export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
-  fov: 45,
-  position: [0, 8, 15],
-  target: [0, 0, -20],
+  fov: 50,
+  near: 0.1,
+  far: 200,
+  position: [0, 6, 8],
+  target: [0, 0, -10],
+  damping: 0.1,
+  transitionMs: 600,
 };
