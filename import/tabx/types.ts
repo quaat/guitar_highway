@@ -70,6 +70,14 @@ export interface TabxCameraTimeline {
   events?: TabxCameraEvent[];
 }
 
+export interface TabxDurationEvent {
+  at: {
+    bar: number;
+    slot: number;
+  };
+  string: number;
+  durationSlots: number;
+}
 
 export interface TabxFretFocusEvent {
   at: {
@@ -92,6 +100,7 @@ export interface TabxSection {
   name: string;
   bars: TabxBar[];
   tempoEvents?: TabxTempoEvent[];
+  durationEvents?: TabxDurationEvent[];
 }
 
 export interface TabxSong {

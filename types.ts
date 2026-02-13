@@ -58,12 +58,12 @@ export const STRING_COLORS = [
              // E (Red), A (Yellow), D (Blue), G (Orange), B (Green), e (Purple)
              // We will map index 1-6 to these.
              // Let's assume String 6 is Low E (Thickest) -> Red
-  '#9333ea', // 1 e (High) - Purple
-  '#22c55e', // 2 B - Green
-  '#f97316', // 3 G - Orange
-  '#3b82f6', // 4 D - Blue
-  '#eab308', // 5 A - Yellow
-  '#ef4444', // 6 E (Low) - Red
+  '#ef4444', // 1 bottom lane color - Red
+  '#eab308', // 2 - Yellow
+  '#3b82f6', // 3 - Blue
+  '#f97316', // 4 - Orange
+  '#22c55e', // 5 - Green
+  '#9333ea', // 6 top lane color - Purple
 ];
 
 // Map 1-based string index to color
@@ -74,10 +74,10 @@ export const getStringColor = (strIndex: number): string => {
 };
 
 export const STRING_COLORS_MAP: Record<number, string> = {
-  1: '#9333ea', // High E
-  2: '#22c55e', // B
-  3: '#f97316', // G
-  4: '#3b82f6', // D
-  5: '#eab308', // A
-  6: '#ef4444', // Low E
+  1: '#ef4444', // bottom lane - Red
+  2: '#eab308', // Yellow
+  3: '#3b82f6', // Blue
+  4: '#f97316', // Orange
+  5: '#22c55e', // Green
+  6: '#9333ea', // top lane - Purple
 };

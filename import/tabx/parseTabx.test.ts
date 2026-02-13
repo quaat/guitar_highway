@@ -198,3 +198,97 @@ E|-----|
   assert(out.errors.some((e) => e.message.includes('fretFocus.defaults')), 'invalid fretFocus defaults should error');
   assert(out.errors.some((e) => e.message.includes('Fret-focus event bounds')), 'invalid fretFocus event bounds should error');
 }
+
+
+{
+  const withDurations = `TABX 2
+
+tab: A
+e|--0-------0-------|
+B|------------------|
+G|------------------|
+D|------------------|
+A|------------------|
+E|------------------|
+
+rhythm:
+  resolution: 16
+  bars: [16, 16]
+
+durations:
+  - at: { bar: 0, slot: 0 }
+    string: 1
+    durationSlots: 4
+  - at: { bar: 0, slot: 8 }
+    string: 1
+    durationSlots: 16
+`;
+
+  const out = parseTabx2Ascii(withDurations);
+  assert(out.errors.length === 0, 'duration block should parse');
+  const converted = tabxSongToEvents(out.song!);
+  const first = converted.notes.find((n) => Math.abs(n.time - 0) < 1e-6);
+  const second = converted.notes.find((n) => Math.abs(n.time - 1) < 1e-6);
+  assert(!!first && !!second, 'expected two notes at slot 0 and slot 8');
+  assert(Math.abs((first?.duration ?? 0) - 0.5) < 1e-6, '4 slots at 120bpm should be 0.5s');
+  assert(Math.abs((second?.duration ?? 0) - 2) < 1e-6, '16-slot sustain across bar boundary should be 2s');
+}
+
+{
+  const withTempoAndDurations = `TABX 2
+
+tab: A
+e|--0--0-----------|
+B|-----------------|
+G|-----------------|
+D|-----------------|
+A|-----------------|
+E|-----------------|
+
+rhythm:
+  resolution: 16
+  bars: [16]
+
+tempo:
+  - at: { bar: 0, slot: 0 }
+    bpm: 120
+  - at: { bar: 0, slot: 8 }
+    bpm: 60
+
+durations:
+  - at: { bar: 0, slot: 0 }
+    string: 1
+    durationSlots: 12
+`;
+
+  const out = parseTabx2Ascii(withTempoAndDurations);
+  assert(out.errors.length === 0, 'tempo + duration block should parse');
+  const converted = tabxSongToEvents(out.song!);
+  const first = converted.notes[0];
+  assert(Math.abs((first.duration ?? 0) - 1.75) < 1e-6, 'duration should integrate bpm changes over sustain window');
+}
+
+{
+  const badDurations = `TABX 2
+
+tab: A
+e|--0--|
+B|-----|
+G|-----|
+D|-----|
+A|-----|
+E|-----|
+
+rhythm:
+  resolution: 8
+  bars: [8]
+
+durations:
+  - at: { bar: 0, slot: 0 }
+    string: 0
+    durationSlots: 0
+`;
+  const out = parseTabx2Ascii(badDurations);
+  assert(out.errors.some((e) => e.message.includes('string must be an integer in range 1..6')), 'duration string validation should error');
+  assert(out.errors.some((e) => e.message.includes('durationSlots must be an integer greater than or equal to 1')), 'durationSlots validation should error');
+}

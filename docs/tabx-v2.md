@@ -74,3 +74,26 @@ rhythm:
 ```
 
 Also note: if your `tab:` starts with empty bars (e.g. `e|-------|----------|` etc.), those bars are imported as silence by design. Remove them if you do not want a pause before notes start.
+
+## Tempo and note durations
+
+Each `tab:` block may include optional `tempo:` and `durations:` timelines.
+
+```yaml
+tempo:
+  - at: { bar: 0, slot: 0 }
+    bpm: 120
+  - at: { bar: 0, slot: 8 }
+    bpm: 90
+
+durations:
+  - at: { bar: 0, slot: 0 }
+    string: 1
+    durationSlots: 4
+```
+
+- `durationSlots` is measured in grid slots and must be `>= 1`.
+- `string` uses rendered `NoteEvent.string` numbering (`1..6`).
+- Durations can cross bar boundaries; sustain length is integrated across tempo changes.
+- If no duration entry exists for a note, the importer uses a default of `1` slot.
+- If multiple notes share the same `(bar, slot, string)`, the same mapped duration is applied to all matching notes.

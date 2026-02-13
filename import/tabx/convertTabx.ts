@@ -1,5 +1,5 @@
 import { NoteEvent, STRING_COLORS_MAP } from '../../types';
-import { CameraConfig, PitchName, TabxSong } from './types';
+import { CameraConfig, PitchName, TabxDurationEvent, TabxSong } from './types';
 
 const NOTE_TO_SEMITONE: Record<string, number> = {
   C: 0,
@@ -38,6 +38,7 @@ export interface ConvertedSong {
   cameraTimeline?: Array<{ timeSec: number; config: Partial<CameraConfig> }>;
   fretFocusDefaults?: { min: number; max: number };
   fretFocusTimeline?: Array<{ timeSec: number; min: number; max: number }>;
+  durationEvents?: TabxDurationEvent[];
 }
 
 export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
@@ -60,6 +61,9 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
 
   song.sections.forEach((section) => {
     const slotTimes = new Map<string, number>();
+    const slotOffsetsInSection = new Map<string, number>();
+    const barElapsedStart: number[] = [];
+    const barDurationsSec: number[] = [];
     const tempoByPosition = new Map<string, number>();
     (section.tempoEvents ?? []).forEach((event) => {
       tempoByPosition.set(`${event.at.bar}:${event.at.slot}`, event.bpm);
@@ -74,6 +78,8 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     section.bars.forEach((bar, barIdx) => {
       const barResolution = Math.max(1, bar.rhythmResolution ?? resolution);
       const slotDurationForBpm = (activeBpm: number) => (60 / activeBpm) * (quartersPerBar / barResolution);
+      const barStartElapsed = elapsedInSectionSec;
+      barElapsedStart[barIdx] = barStartElapsed;
 
       for (let slot = 0; slot < barResolution; slot += 1) {
         const key = `${barIdx}:${slot}`;
@@ -87,6 +93,7 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
 
         const absTime = sectionStartSec + elapsedInSectionSec;
         slotTimes.set(key, absTime);
+        slotOffsetsInSection.set(key, elapsedInSectionSec);
 
         const globalBar = globalBarOffset + barIdx;
         while (cameraEventIndex < cameraEvents.length) {
@@ -106,17 +113,64 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
         elapsedInSectionSec += slotDurationForBpm(currentBpm);
       }
 
+      barDurationsSec[barIdx] = elapsedInSectionSec - barStartElapsed;
+    });
+
+    const computeDurationSec = (barIdx: number, slot: number, durationSlots: number): number => {
+      let remaining = durationSlots;
+      let currentBar = barIdx;
+      let currentSlot = slot;
+      let totalDuration = 0;
+
+      while (remaining > 0 && currentBar < section.bars.length) {
+        const activeBar = section.bars[currentBar];
+        const activeBarResolution = Math.max(1, activeBar.rhythmResolution ?? resolution);
+        const barStart = barElapsedStart[currentBar] ?? elapsedInSectionSec;
+
+        if (currentSlot >= activeBarResolution) {
+          currentBar += 1;
+          currentSlot = 0;
+          continue;
+        }
+
+        const takeSlots = Math.min(remaining, activeBarResolution - currentSlot);
+        const startOffset = slotOffsetsInSection.get(`${currentBar}:${currentSlot}`) ?? barStart;
+        const endOffset = currentSlot + takeSlots >= activeBarResolution
+          ? barStart + (barDurationsSec[currentBar] ?? 0)
+          : (slotOffsetsInSection.get(`${currentBar}:${currentSlot + takeSlots}`) ?? barStart);
+        totalDuration += Math.max(0, endOffset - startOffset);
+
+        remaining -= takeSlots;
+        currentBar += 1;
+        currentSlot = 0;
+      }
+
+      return totalDuration;
+    };
+
+    const durationByPositionAndString = new Map<string, number>();
+    (section.durationEvents ?? []).forEach((event) => {
+      durationByPositionAndString.set(
+        `${event.at.bar}:${event.at.slot}:${event.string}`,
+        computeDurationSec(event.at.bar, event.at.slot, event.durationSlots)
+      );
+    });
+
+    section.bars.forEach((bar, barIdx) => {
+      const barResolution = Math.max(1, bar.rhythmResolution ?? resolution);
       bar.events.forEach((event) => {
         const slot = event.slot ?? Math.round((event.col / Math.max(1, resolution - 1)) * Math.max(0, barResolution - 1));
         const boundedSlot = Math.max(0, Math.min(barResolution - 1, slot));
         const time = slotTimes.get(`${barIdx}:${boundedSlot}`) ?? sectionStartSec + elapsedInSectionSec;
         const string = 6 - event.stringIndex;
+        const duration = durationByPositionAndString.get(`${barIdx}:${boundedSlot}:${string}`) ?? computeDurationSec(barIdx, boundedSlot, 1);
+
         notes.push({
           id: `tabx-${idCounter++}`,
           time,
           fret: event.fret,
           string,
-          duration: 0.12,
+          duration,
           color: STRING_COLORS_MAP[string],
           midi: midiFromStringFret(tuning, capo, event.stringIndex, event.fret),
           techniques: event.techniques,
@@ -139,6 +193,7 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     cameraTimeline,
     fretFocusDefaults: song.fretFocus?.defaults,
     fretFocusTimeline,
+    durationEvents: song.sections.flatMap((section) => section.durationEvents ?? []),
   };
 };
 
