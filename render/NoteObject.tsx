@@ -13,10 +13,13 @@ interface NoteObjectProps {
 const PREVIEW_LEAD_TIME_SEC = 2.0;
 const PREVIEW_Z = 0.02;
 const PREVIEW_FADE_OUT_SEC = 0.15;
+const CUT_PLANE_Z = 0;
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 const smoothstep = (value: number): number => value * value * (3 - 2 * value);
+
+const rangesIntersect = (aMin: number, aMax: number, bMin: number, bMax: number): boolean => aMax >= bMin && aMin <= bMax;
 
 const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) => {
   const groupRef = useRef<Group>(null);
@@ -74,26 +77,35 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     const maxFret = config.maxFret ?? 24;
     const inFretRange = note.fret >= minFret && note.fret <= maxFret;
 
-    const nearZ = 0.6;
+    const nearZ = CUT_PLANE_Z;
     const farZ = -(config.viewDistance + 20);
-    const headZ = targetPos.z;
-    const tailZ = targetPos.z - sustainLength - depth * 0.5;
-    const sustainIntersectsView = headZ >= farZ && tailZ <= nearZ;
-    const visible = inFretRange && sustainIntersectsView;
+    const beadMinZ = targetPos.z - depth * 0.5;
+    const beadMaxZ = targetPos.z + depth * 0.5;
 
-    groupRef.current.visible = visible;
+    const trailWorldEndZ = targetPos.z - depth * 0.5;
+    const trailWorldStartZ = trailWorldEndZ - sustainLength;
+    const clippedTrailEndZ = Math.min(trailWorldEndZ, CUT_PLANE_Z);
+    const clippedTrailLength = Math.max(0, clippedTrailEndZ - trailWorldStartZ);
+
+    const beadVisible = inFretRange && rangesIntersect(beadMinZ, beadMaxZ, farZ, nearZ);
+    const trailVisible = inFretRange && clippedTrailLength > 0.001 && rangesIntersect(trailWorldStartZ, clippedTrailEndZ, farZ, nearZ);
+
+    groupRef.current.visible = beadVisible || trailVisible;
+    beadRef.current.visible = beadVisible;
 
     if (rodRef.current) {
       const highwaySurfaceY = -(config.stringSpacing * 6) / 2;
       const rodHeight = Math.max(0.01, targetPos.y - highwaySurfaceY);
       rodRef.current.scale.y = rodHeight;
-      // Keep the rod explicitly pointing downward to the highway floor from note position.
       rodRef.current.position.y = -rodHeight * 0.5;
-      rodRef.current.visible = visible;
+      rodRef.current.visible = beadVisible;
     }
 
     if (trailRef.current) {
-      trailRef.current.visible = visible && sustainLength > 0.001;
+      const localTrailMidZ = ((trailWorldStartZ + clippedTrailEndZ) * 0.5) - targetPos.z;
+      trailRef.current.position.set(0, 0, localTrailMidZ);
+      trailRef.current.scale.set(1, 1, clippedTrailLength);
+      trailRef.current.visible = trailVisible;
     }
 
     if (previewMeshRef.current && previewMaterialRef.current) {
@@ -116,38 +128,34 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
   return (
     <>
       <group ref={groupRef}>
-        {sustainLength > 0.001 && (
-          <mesh ref={trailRef} position={[0, 0, -(depth * 0.5 + sustainLength * 0.5)]}>
-            <boxGeometry args={[width * 0.9, height * 0.9, sustainLength]} />
-            <meshStandardMaterial
-              color={color}
-              transparent
-              opacity={0.8}
-              roughness={0.35}
-              metalness={0.08}
-              emissive={color}
-              emissiveIntensity={0.06}
-            />
-          </mesh>
-        )}
+        <mesh ref={trailRef} position={[0, 0, 0]} scale={[1, 1, 1]}>
+          <boxGeometry args={[width * 0.9, height * 0.9, 1]} />
+          <meshStandardMaterial
+            color={color}
+            transparent
+            opacity={0.8}
+            roughness={0.35}
+            metalness={0.08}
+            emissive={color}
+            emissiveIntensity={0.06}
+          />
+        </mesh>
 
         <mesh ref={beadRef}>
           <boxGeometry args={[width, height, depth]} />
           <meshStandardMaterial ref={beadMaterialRef} color={color} roughness={0.3} metalness={0.1} />
         </mesh>
 
-        {note.string < 6 && (
-          <mesh ref={rodRef} position={[0, -0.5, 0]}>
-            <boxGeometry args={[Math.max(0.035, config.fretSpacing * 0.045), 1, Math.max(0.03, depth * 0.08)]} />
-            <meshStandardMaterial
-              color={color}
-              transparent
-              opacity={0.5}
-              roughness={0.6}
-              metalness={0.05}
-            />
-          </mesh>
-        )}
+        <mesh ref={rodRef} position={[0, -0.5, 0]}>
+          <boxGeometry args={[Math.max(0.035, config.fretSpacing * 0.045), 1, Math.max(0.03, depth * 0.08)]} />
+          <meshStandardMaterial
+            color={color}
+            transparent
+            opacity={0.5}
+            roughness={0.6}
+            metalness={0.05}
+          />
+        </mesh>
       </group>
 
       <mesh ref={previewMeshRef}>
