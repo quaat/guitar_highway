@@ -102,7 +102,7 @@ meta:
 
 tab: Main
 
-${Array.from({ length: 10 }, () => groupA).join('\\n\\n')}
+${Array.from({ length: 10 }, () => groupA).join('\n\n')}
 
 rhythm:
   resolution: 16
