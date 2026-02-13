@@ -11,6 +11,7 @@ import {
   TabxFretFocusTimeline,
   TabxMeta,
   TabxNoteCell,
+  TabxDurationEvent,
   TabxSection,
   TabxSong,
   TabxTempoEvent,
@@ -566,7 +567,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
         const row = stripInlineComment(lines[i]);
         const trimmed = row.trim();
         if (!trimmed) { i += 1; continue; }
-        if (/^\s*(tab:|meta:|rhythm:|tempo:|camera:|fretFocus:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
+        if (/^\s*(tab:|meta:|rhythm:|tempo:|durations:|camera:|fretFocus:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
         const resolutionMatch = row.match(/^\s*resolution:\s*(\d+)\s*$/);
         if (resolutionMatch) { rhythmResolution = Number(resolutionMatch[1]); i += 1; continue; }
         const barNumberItem = row.match(/^\s*-\s*(\d+)\s*$/);
@@ -617,7 +618,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
         const row = stripInlineComment(lines[i]);
         const trimmed = row.trim();
         if (!trimmed) { i += 1; continue; }
-        if (/^\s*(tab:|meta:|rhythm:|tempo:|camera:|fretFocus:)/.test(trimmed)) break;
+        if (/^\s*(tab:|meta:|rhythm:|tempo:|durations:|camera:|fretFocus:)/.test(trimmed)) break;
 
         const itemMatch = row.match(/^\s*-\s*(.*)$/);
         if (itemMatch) {
@@ -643,7 +644,63 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
       if (!tempoEvents.length) tempoEvents = undefined;
     }
 
-    sections.push({ name, bars, tempoEvents });
+    let durationEvents: TabxDurationEvent[] | undefined;
+    while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
+    if (i < lines.length && stripInlineComment(lines[i]).trim() === 'durations:') {
+      i += 1;
+      durationEvents = [];
+      let pending: { at?: { bar: number; slot: number }; string?: number; durationSlots?: number; line: number; column: number } | undefined;
+
+      const finalizePending = () => {
+        if (!pending) return;
+        if (!pending.at) addError(pending.line, pending.column, 'Duration event has malformed or missing "at". Expected: at: { bar: <int>, slot: <int> }.');
+        else if (pending.at.bar < 0 || pending.at.slot < 0) addError(pending.line, pending.column, 'Duration event "at" must use non-negative bar/slot values.');
+        else if (pending.at.bar >= bars.length) addError(pending.line, pending.column, `Duration event bar index ${pending.at.bar} is out of range for section "${name}" (${bars.length} bars).`);
+        else {
+          const barResolution = Math.max(1, bars[pending.at.bar].rhythmResolution ?? meta.resolution);
+          if (pending.at.slot >= barResolution) addError(pending.line, pending.column, `Duration event slot ${pending.at.slot} is out of range for bar ${pending.at.bar} (resolution ${barResolution}).`);
+          else if (!Number.isInteger(pending.string) || pending.string! < 1 || pending.string! > 6) addError(pending.line, pending.column, 'Duration event string must be an integer in range 1..6.');
+          else if (!Number.isInteger(pending.durationSlots) || pending.durationSlots! < 1) addError(pending.line, pending.column, 'Duration event durationSlots must be an integer greater than or equal to 1.');
+          else durationEvents!.push({ at: pending.at, string: pending.string!, durationSlots: pending.durationSlots! });
+        }
+        pending = undefined;
+      };
+
+      while (i < lines.length) {
+        const row = stripInlineComment(lines[i]);
+        const trimmed = row.trim();
+        if (!trimmed) { i += 1; continue; }
+        if (/^\s*(tab:|meta:|rhythm:|tempo:|durations:|camera:|fretFocus:)/.test(trimmed)) break;
+
+        const itemMatch = row.match(/^\s*-\s*(.*)$/);
+        if (itemMatch) {
+          finalizePending();
+          pending = { line: i + 1, column: 1 };
+          const inline = itemMatch[1].trim();
+          if (inline.startsWith('at:')) pending.at = parseAt(inline.slice(3).trim());
+          else if (inline.startsWith('string:')) pending.string = parseIntegerValue(inline.slice(7).trim());
+          else if (inline.startsWith('durationSlots:')) pending.durationSlots = parseIntegerValue(inline.slice(14).trim());
+          i += 1;
+          continue;
+        }
+
+        const atMatch = row.match(/^\s*at:\s*(.+)$/);
+        if (atMatch && pending) { pending.at = parseAt(atMatch[1].trim()); i += 1; continue; }
+
+        const stringMatch = row.match(/^\s*string:\s*(.+)$/);
+        if (stringMatch && pending) { pending.string = parseIntegerValue(stringMatch[1].trim()); i += 1; continue; }
+
+        const durationMatch = row.match(/^\s*durationSlots:\s*(.+)$/);
+        if (durationMatch && pending) { pending.durationSlots = parseIntegerValue(durationMatch[1].trim()); i += 1; continue; }
+
+        i += 1;
+      }
+
+      finalizePending();
+      if (!durationEvents.length) durationEvents = undefined;
+    }
+
+    sections.push({ name, bars, tempoEvents, durationEvents });
   }
 
   if (!sections.length) addError(i + 1, 1, 'At least one tab block is required.');

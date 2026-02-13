@@ -24,10 +24,11 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
   const previewMeshRef = useRef<Mesh>(null);
   const previewMaterialRef = useRef<MeshStandardMaterial>(null);
   const rodRef = useRef<Mesh>(null);
+  const trailRef = useRef<Mesh>(null);
 
   const color = useMemo(() => STRING_COLORS_MAP[note.string] || '#fff', [note.string]);
+  const sustainLength = Math.max(0, (note.duration ?? 0) * config.speed);
 
-  // Reuse Vector3 to avoid GC; this keeps preview aligned with lane mapping at impact.
   const impactPosition = useMemo(
     () => worldPositionForEvent(note, note.time, config),
     [note, config]
@@ -36,18 +37,11 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
   useFrame(() => {
     if (!meshRef.current) return;
 
-    // Calculate Z dynamically
-    // We could optimize by only calculating Z, but the mapping function is cheap.
-    // Let's manually do Z for perf:
-    // const z = -(note.time - playheadRef.current) * config.speed;
-
-    // Using the shared domain function ensures consistency
     const targetPos = worldPositionForEvent(note, playheadRef.current, config);
 
     meshRef.current.position.copy(targetPos);
 
     if (previewMeshRef.current) {
-      // Slight positive z-offset avoids z-fighting with highway line geometry.
       previewMeshRef.current.position.set(impactPosition.x, impactPosition.y, PREVIEW_Z);
     }
 
@@ -72,11 +66,11 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
       }
     }
 
-    const dist = targetPos.z;
+    const trailTailZ = targetPos.z - sustainLength;
     const minFret = config.minFret ?? 1;
     const maxFret = config.maxFret ?? 24;
     const inFretRange = note.fret >= minFret && note.fret <= maxFret;
-    const visible = inFretRange && dist < 0.6 && dist > -(config.viewDistance + 20);
+    const visible = inFretRange && targetPos.z < 0.6 && trailTailZ > -(config.viewDistance + 20);
     meshRef.current.visible = visible;
 
     if (rodRef.current) {
@@ -87,13 +81,16 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
       rodRef.current.visible = visible;
     }
 
+    if (trailRef.current) {
+      trailRef.current.visible = visible && sustainLength > 0.001;
+    }
+
     if (previewMeshRef.current && previewMaterialRef.current) {
       const previewVisible = inFretRange && timeUntilHit <= PREVIEW_LEAD_TIME_SEC && timeUntilHit >= -PREVIEW_FADE_OUT_SEC;
 
       let previewOpacity = 0;
       if (timeUntilHit >= 0) {
         const t = clamp(1 - timeUntilHit / PREVIEW_LEAD_TIME_SEC, 0, 1);
-        // Smoothstep eases in/out so the ghost note fades naturally.
         previewOpacity = smoothstep(t);
       } else {
         const fadeOut = clamp((-timeUntilHit) / PREVIEW_FADE_OUT_SEC, 0, 1);
@@ -105,14 +102,20 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     }
   });
 
-  // Calculate dimensions based on spacing to fit in lane
   const width = config.fretSpacing * 0.8;
   const height = config.stringSpacing * 0.6;
-  const depth = 0.5; // Fixed thickness
+  const depth = 0.5;
 
   return (
     <>
       <mesh ref={meshRef}>
+        {sustainLength > 0.001 && (
+          <mesh ref={trailRef} position={[0, 0, -sustainLength / 2]}>
+            <boxGeometry args={[Math.max(0.06, width * 0.24), Math.max(0.06, height * 0.24), sustainLength]} />
+            <meshStandardMaterial color={color} transparent opacity={0.65} roughness={0.35} metalness={0.08} emissive={color} emissiveIntensity={0.05} />
+          </mesh>
+        )}
+
         <boxGeometry args={[width, height, depth]} />
         <meshStandardMaterial ref={materialRef} color={color} roughness={0.3} metalness={0.1} />
 
