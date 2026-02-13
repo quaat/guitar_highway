@@ -24,11 +24,10 @@ export const worldPositionForEvent = (
   playheadTime: number,
   config: HighwayConfig
 ): Vector3 => {
-  // Center fretboard on X. 24 frets.
-  // Fret 1 is at index 0 physically? Let's say Fret 1 is far left.
-  // Width = 24 * spacing.
-  // Center = 12.5.
-  const x = (event.fret - 12.5) * config.fretSpacing;
+  const minFret = config.minFret ?? 1;
+  const maxFret = config.maxFret ?? 24;
+  const centerFret = (minFret + maxFret) / 2;
+  const x = (event.fret - centerFret) * config.fretSpacing;
 
   // Center strings on Y. 6 strings.
   // Center = 3.5.
@@ -52,6 +51,10 @@ export const isVisible = (
   config: HighwayConfig
 ): boolean => {
   const z = -(event.time - playheadTime) * config.speed;
+  const minFret = config.minFret ?? 1;
+  const maxFret = config.maxFret ?? 24;
+  const inFretRange = event.fret >= minFret && event.fret <= maxFret;
+
   // Visible if between near clip (slightly positive for "just passed") and far clip
-  return z < 5 && z > -(config.viewDistance + 10);
+  return inFretRange && z < 5 && z > -(config.viewDistance + 10);
 };

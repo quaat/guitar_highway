@@ -78,6 +78,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   const handleChange = <K extends keyof HighwayConfig>(key: K, value: HighwayConfig[K]) => onConfigChange({ ...config, [key]: value });
   const handleMeta = <K extends keyof SongMeta>(key: K, value: SongMeta[K]) => onSongMetaChange({ ...songMeta, [key]: value });
 
+  const updateFretRange = (nextMinRaw: number, nextMaxRaw: number) => {
+    const nextMin = Math.max(1, Math.min(24, Math.round(nextMinRaw)));
+    const nextMax = Math.max(1, Math.min(24, Math.round(nextMaxRaw)));
+    onConfigChange({
+      ...config,
+      minFret: Math.min(nextMin, nextMax),
+      maxFret: Math.max(nextMin, nextMax),
+    });
+  };
+
   const updateCameraField = <K extends keyof CameraConfig>(key: K, value: CameraConfig[K]) => {
     onCameraConfigChange({ ...cameraConfig, [key]: value });
   };
@@ -229,6 +239,37 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <div>
             <div className="flex justify-between text-xs mb-1"><span className="flex items-center gap-1"><Eye size={12} />View Dist</span><span className="text-gray-400">{config.viewDistance}</span></div>
             <input type="range" min="50" max="300" step="10" value={config.viewDistance} onChange={(e) => handleChange('viewDistance', Number(e.target.value))} className="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+          </div>
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span>Fret Focus</span>
+              <button
+                onClick={() => updateFretRange(1, 24)}
+                className="px-2 py-1 rounded bg-gray-700 hover:bg-gray-600"
+              >
+                Reset 1-24
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className="bg-gray-800 rounded p-2"
+                type="number"
+                min={1}
+                max={24}
+                value={config.minFret ?? 1}
+                onChange={(e) => updateFretRange(Number(e.target.value), config.maxFret ?? 24)}
+                placeholder="Min fret"
+              />
+              <input
+                className="bg-gray-800 rounded p-2"
+                type="number"
+                min={1}
+                max={24}
+                value={config.maxFret ?? 24}
+                onChange={(e) => updateFretRange(config.minFret ?? 1, Number(e.target.value))}
+                placeholder="Max fret"
+              />
+            </div>
           </div>
         </div>
       </div>

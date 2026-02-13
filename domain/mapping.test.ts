@@ -20,7 +20,7 @@ describe('Domain: Mapping Logic', () => {
   };
 
   test('Calculates X position correctly for fret centering', () => {
-    // Center is 12.5. Fret 12 should be slightly left (-0.5), Fret 13 slightly right (0.5)
+    // Default center is 12.5. Fret 12 should be slightly left (-0.5), Fret 13 slightly right (0.5)
     const noteLeft: NoteEvent = { id: '1', fret: 12, string: 1, time: 0 };
     const posLeft = worldPositionForEvent(noteLeft, 0, config);
     
@@ -29,6 +29,17 @@ describe('Domain: Mapping Logic', () => {
 
     expect(posLeft.x).toBe(-0.5);
     expect(posRight.x).toBe(0.5);
+  });
+
+
+
+  test('Calculates X position with a custom fret focus range', () => {
+    const customConfig: HighwayConfig = { ...config, minFret: 10, maxFret: 17 };
+    const centeredLeft: NoteEvent = { id: '3', fret: 13, string: 1, time: 0 };
+    const centeredRight: NoteEvent = { id: '4', fret: 14, string: 1, time: 0 };
+
+    expect(worldPositionForEvent(centeredLeft, 0, customConfig).x).toBe(-0.5);
+    expect(worldPositionForEvent(centeredRight, 0, customConfig).x).toBe(0.5);
   });
 
   test('Calculates Y position correctly for string height', () => {

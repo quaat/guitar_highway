@@ -73,7 +73,10 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     }
 
     const dist = targetPos.z;
-    const visible = dist < 0.6 && dist > -(config.viewDistance + 20);
+    const minFret = config.minFret ?? 1;
+    const maxFret = config.maxFret ?? 24;
+    const inFretRange = note.fret >= minFret && note.fret <= maxFret;
+    const visible = inFretRange && dist < 0.6 && dist > -(config.viewDistance + 20);
     meshRef.current.visible = visible;
 
     if (rodRef.current) {
@@ -85,7 +88,7 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config }) =>
     }
 
     if (previewMeshRef.current && previewMaterialRef.current) {
-      const previewVisible = timeUntilHit <= PREVIEW_LEAD_TIME_SEC && timeUntilHit >= -PREVIEW_FADE_OUT_SEC;
+      const previewVisible = inFretRange && timeUntilHit <= PREVIEW_LEAD_TIME_SEC && timeUntilHit >= -PREVIEW_FADE_OUT_SEC;
 
       let previewOpacity = 0;
       if (timeUntilHit >= 0) {

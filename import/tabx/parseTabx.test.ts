@@ -142,3 +142,59 @@ E|-----|
   const out = parseTabx2Ascii(badCameraSnapshotRef);
   assert(out.errors.some((e) => e.message.includes('Unknown camera snapshot')), 'unknown camera snapshot reference should error');
 }
+
+{
+  const withFretFocus = `TABX 2
+fretFocus:
+  defaults: { min: 3, max: 15 }
+  events:
+    - at: { bar: 0, slot: 0 }
+      min: 3
+      max: 12
+    - at: { bar: 0, slot: 8 }
+      min: 10
+      max: 17
+
+tab: A
+e|--0--0--0--0--|
+B|---------------|
+G|---------------|
+D|---------------|
+A|---------------|
+E|---------------|
+
+rhythm:
+  resolution: 16
+  bars: [16]
+`;
+
+  const out = parseTabx2Ascii(withFretFocus);
+  assert(out.errors.length === 0, 'fretFocus block should parse');
+  const converted = tabxSongToEvents(out.song!);
+  assert(converted.fretFocusDefaults?.min === 3 && converted.fretFocusDefaults?.max === 15, 'fretFocus defaults should parse');
+  assert((converted.fretFocusTimeline ?? []).length === 2, 'fretFocus timeline should convert to seconds');
+  assert((converted.fretFocusTimeline ?? [])[1].min === 10, 'fretFocus event min should convert');
+}
+
+{
+  const badFretFocus = `TABX 2
+fretFocus:
+  defaults: { min: 0, max: 30 }
+  events:
+    - at: { bar: 0, slot: 0 }
+      min: 12
+      max: 3
+
+tab: A
+e|--0--|
+B|-----|
+G|-----|
+D|-----|
+A|-----|
+E|-----|
+`;
+
+  const out = parseTabx2Ascii(badFretFocus);
+  assert(out.errors.some((e) => e.message.includes('fretFocus.defaults')), 'invalid fretFocus defaults should error');
+  assert(out.errors.some((e) => e.message.includes('Fret-focus event bounds')), 'invalid fretFocus event bounds should error');
+}

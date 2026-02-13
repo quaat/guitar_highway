@@ -7,6 +7,8 @@ import {
   TabxCameraEvent,
   TabxCameraPartialConfig,
   TabxCameraTimeline,
+  TabxFretFocusEvent,
+  TabxFretFocusTimeline,
   TabxMeta,
   TabxNoteCell,
   TabxSection,
@@ -51,6 +53,21 @@ const parseAt = (value: string): { bar: number; slot: number } | undefined => {
   if (!match) return undefined;
   return { bar: Number(match[1]), slot: Number(match[2]) };
 };
+
+
+const parseIntegerValue = (value: string): number | undefined => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return undefined;
+  return parsed;
+};
+
+const isValidFretBounds = (min: number, max: number): boolean => (
+  min >= 1 &&
+  min <= 24 &&
+  max >= 1 &&
+  max <= 24 &&
+  min <= max
+);
 
 const parseCameraValue = (key: string, rawValue: string): number | [number, number, number] | undefined => {
   if (key === 'position' || key === 'target' || key === 'rotationEuler') {
@@ -292,6 +309,107 @@ const parseCameraBlock = (lines: string[], startAt: number, diagnostics: ParseDi
   return { camera: defaults || events || hasSnapshots ? { snapshots: hasSnapshots ? snapshots : undefined, defaults, events } : undefined, i };
 };
 
+
+const parseFretFocusBlock = (lines: string[], startAt: number, diagnostics: ParseDiagnostic[]): { fretFocus?: TabxFretFocusTimeline; i: number } => {
+  let i = startAt;
+  if (stripInlineComment(lines[i] ?? '').trim() !== 'fretFocus:') return { i };
+  i += 1;
+
+  const addError = (line: number, column: number, message: string) => diagnostics.push({ severity: 'error', message, line, column, contextLine: lines[line - 1] ?? '' });
+
+  let defaults: TabxFretFocusTimeline['defaults'];
+  let events: TabxFretFocusEvent[] | undefined;
+
+  while (i < lines.length) {
+    const row = stripInlineComment(lines[i]);
+    const trimmed = row.trim();
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
+    if (!row.startsWith('  ')) break;
+
+    if (trimmed.startsWith('defaults:')) {
+      const match = row.match(/^\s{2}defaults:\s*\{\s*min:\s*(-?\d+)\s*,\s*max:\s*(-?\d+)\s*\}\s*$/);
+      if (!match) {
+        addError(i + 1, 1, 'fretFocus.defaults must use "{ min: <int>, max: <int> }" syntax.');
+      } else {
+        const min = Number(match[1]);
+        const max = Number(match[2]);
+        if (!isValidFretBounds(min, max)) addError(i + 1, 1, 'fretFocus.defaults must be integer bounds within 1..24 and min <= max.');
+        else defaults = { min, max };
+      }
+      i += 1;
+      continue;
+    }
+
+    if (trimmed === 'events:') {
+      i += 1;
+      events = [];
+      type PendingEvent = { line: number; at?: { bar: number; slot: number }; min?: number; max?: number };
+      let pending: PendingEvent | undefined;
+
+      const finalize = () => {
+        if (!pending) return;
+        if (!pending.at) addError(pending.line, 1, 'Fret-focus event has malformed or missing "at". Expected: at: { bar: <int>, slot: <int> }.');
+        else if (pending.at.bar < 0 || pending.at.slot < 0) addError(pending.line, 1, 'Fret-focus event "at" must use non-negative bar/slot values.');
+        else if (pending.min === undefined || pending.max === undefined) addError(pending.line, 1, 'Fret-focus event must include both min and max.');
+        else if (!isValidFretBounds(pending.min, pending.max)) addError(pending.line, 1, 'Fret-focus event bounds must be integer values within 1..24 and min <= max.');
+        else events!.push({ at: pending.at, min: pending.min, max: pending.max });
+        pending = undefined;
+      };
+
+      while (i < lines.length) {
+        const eventRow = stripInlineComment(lines[i]);
+        const eventTrimmed = eventRow.trim();
+        if (!eventTrimmed) {
+          i += 1;
+          continue;
+        }
+        if (!eventRow.startsWith('    ')) break;
+
+        const itemMatch = eventRow.match(/^\s{4}-\s*(.*)$/);
+        if (itemMatch) {
+          finalize();
+          pending = { line: i + 1 };
+          const inline = itemMatch[1].trim();
+          if (inline.startsWith('at:')) pending.at = parseAt(inline.slice(3).trim());
+          i += 1;
+          continue;
+        }
+
+        if (!pending) {
+          i += 1;
+          continue;
+        }
+
+        const fieldMatch = eventRow.match(/^\s{6}([A-Za-z][\w]*)\s*:\s*(.+)$/);
+        if (!fieldMatch) {
+          i += 1;
+          continue;
+        }
+
+        const [, key, rawValue] = fieldMatch;
+        if (key === 'at') pending.at = parseAt(rawValue.trim());
+        else if (key === 'min') pending.min = parseIntegerValue(rawValue.trim());
+        else if (key === 'max') pending.max = parseIntegerValue(rawValue.trim());
+        else addError(i + 1, 1, `Unsupported fretFocus event key "${key}".`);
+
+        i += 1;
+      }
+
+      finalize();
+      if (!events.length) events = undefined;
+      continue;
+    }
+
+    addError(i + 1, 1, `Unsupported fretFocus block key "${trimmed}".`);
+    i += 1;
+  }
+
+  return { fretFocus: defaults || events ? { defaults, events } : undefined, i };
+};
+
 const normalizeStringLabel = (label: string): string | undefined => STRING_ALIAS_MAP[label];
 
 const tokenizeStringContent = (content: string, stringIndex: number): Array<TabxNoteCell & { bar: number }> => {
@@ -390,6 +508,11 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
   const camera = parsedCamera.camera;
   i = parsedCamera.i;
 
+  while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
+  const parsedFretFocus = parseFretFocusBlock(lines, i, diagnostics);
+  const fretFocus = parsedFretFocus.fretFocus;
+  i = parsedFretFocus.i;
+
   const sections: TabxSection[] = [];
   while (i < lines.length) {
     while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
@@ -443,7 +566,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
         const row = stripInlineComment(lines[i]);
         const trimmed = row.trim();
         if (!trimmed) { i += 1; continue; }
-        if (/^\s*(tab:|meta:|rhythm:|tempo:|camera:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
+        if (/^\s*(tab:|meta:|rhythm:|tempo:|camera:|fretFocus:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
         const resolutionMatch = row.match(/^\s*resolution:\s*(\d+)\s*$/);
         if (resolutionMatch) { rhythmResolution = Number(resolutionMatch[1]); i += 1; continue; }
         const barNumberItem = row.match(/^\s*-\s*(\d+)\s*$/);
@@ -494,7 +617,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
         const row = stripInlineComment(lines[i]);
         const trimmed = row.trim();
         if (!trimmed) { i += 1; continue; }
-        if (/^\s*(tab:|meta:|rhythm:|tempo:|camera:)/.test(trimmed)) break;
+        if (/^\s*(tab:|meta:|rhythm:|tempo:|camera:|fretFocus:)/.test(trimmed)) break;
 
         const itemMatch = row.match(/^\s*-\s*(.*)$/);
         if (itemMatch) {
@@ -528,7 +651,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
   const errors = diagnostics.filter((d) => d.severity === 'error').map((d) => ({ message: d.message, line: d.line, column: d.column, contextLine: d.contextLine }));
   if (errors.length) return { diagnostics, errors };
 
-  return { song: { meta, sections, camera }, diagnostics, errors: [] };
+  return { song: { meta, sections, camera, fretFocus }, diagnostics, errors: [] };
 };
 
 export const parseTabx = (text: string): { song?: TabxSong; errors: ParseError[] } => {

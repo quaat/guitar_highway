@@ -36,11 +36,14 @@ export interface ConvertedSong {
   tempoMap?: Array<{ timeSec: number; bpm: number }>;
   cameraDefaults?: CameraConfig;
   cameraTimeline?: Array<{ timeSec: number; config: Partial<CameraConfig> }>;
+  fretFocusDefaults?: { min: number; max: number };
+  fretFocusTimeline?: Array<{ timeSec: number; min: number; max: number }>;
 }
 
 export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
   const notes: NoteEvent[] = [];
   const cameraTimeline: Array<{ timeSec: number; config: Partial<CameraConfig> }> = [];
+  const fretFocusTimeline: Array<{ timeSec: number; min: number; max: number }> = [];
   const { bpm: defaultBpm, timeSig, tuning, capo, resolution } = song.meta;
   const tempoMap: Array<{ timeSec: number; bpm: number }> = [];
   const quartersPerBar = timeSig.num * (4 / timeSig.den);
@@ -51,6 +54,9 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
 
   const cameraEvents = [...(song.camera?.events ?? [])].sort((a, b) => (a.at.bar === b.at.bar ? a.at.slot - b.at.slot : a.at.bar - b.at.bar));
   let cameraEventIndex = 0;
+
+  const fretFocusEvents = [...(song.fretFocus?.events ?? [])].sort((a, b) => (a.at.bar === b.at.bar ? a.at.slot - b.at.slot : a.at.bar - b.at.bar));
+  let fretFocusEventIndex = 0;
 
   song.sections.forEach((section) => {
     const slotTimes = new Map<string, number>();
@@ -90,6 +96,13 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
           cameraEventIndex += 1;
         }
 
+        while (fretFocusEventIndex < fretFocusEvents.length) {
+          const nextEvent = fretFocusEvents[fretFocusEventIndex];
+          if (nextEvent.at.bar !== globalBar || nextEvent.at.slot !== slot) break;
+          fretFocusTimeline.push({ timeSec: absTime, min: nextEvent.min, max: nextEvent.max });
+          fretFocusEventIndex += 1;
+        }
+
         elapsedInSectionSec += slotDurationForBpm(currentBpm);
       }
 
@@ -124,6 +137,8 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     tempoMap,
     cameraDefaults: song.camera?.defaults,
     cameraTimeline,
+    fretFocusDefaults: song.fretFocus?.defaults,
+    fretFocusTimeline,
   };
 };
 

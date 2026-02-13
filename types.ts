@@ -32,6 +32,8 @@ export interface HighwayConfig {
   laneGlowDistance?: number;
   maxStringGlowIntensity?: number;
   maxLaneGlowIntensity?: number;
+  minFret?: number;
+  maxFret?: number;
 }
 
 export interface CameraConfig {

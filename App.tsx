@@ -47,12 +47,14 @@ const App: React.FC = () => {
   const [songMeta, setSongMeta] = useState<SongMeta>(DEFAULT_META);
   const [importedSong, setImportedSong] = useState<TabxSong | null>(null);
   const [cameraTimeline, setCameraTimeline] = useState<Array<{ timeSec: number; config: Partial<CameraConfig> }>>([]);
+  const [fretFocusTimeline, setFretFocusTimeline] = useState<Array<{ timeSec: number; min: number; max: number }>>([]);
 
   const { isPlaying, playheadRef, togglePlay, reset, resetToken } = usePlayback();
   const [notes, setNotes] = useState<NoteEvent[]>(() => generateDemoSong());
   const backingTrackAudioRef = useRef<HTMLAudioElement | null>(null);
   const delayedAudioStartRef = useRef<number>();
   const cameraEventIndexRef = useRef(0);
+  const fretFocusEventIndexRef = useRef(0);
 
   useNoteScheduler({ notes, isPlaying, playheadRef, outputDevice: audioDevice, resetToken });
 
@@ -101,8 +103,15 @@ const App: React.FC = () => {
     setImportedSong(song);
     setNotes(converted.notes);
     setCameraTimeline(converted.cameraTimeline ?? []);
+    setFretFocusTimeline(converted.fretFocusTimeline ?? []);
     setCameraConfig(converted.cameraDefaults ?? DEFAULT_CAMERA_CONFIG);
+    setConfig((current) => ({
+      ...current,
+      minFret: converted.fretFocusDefaults?.min ?? DEFAULT_HIGHWAY_CONFIG.minFret,
+      maxFret: converted.fretFocusDefaults?.max ?? DEFAULT_HIGHWAY_CONFIG.maxFret,
+    }));
     cameraEventIndexRef.current = 0;
+    fretFocusEventIndexRef.current = 0;
     reset();
   };
 
@@ -112,11 +121,18 @@ const App: React.FC = () => {
     const converted = convertTabxToEvents(updated);
     setNotes(converted.notes);
     setCameraTimeline(converted.cameraTimeline ?? []);
+    setFretFocusTimeline(converted.fretFocusTimeline ?? []);
+    setConfig((current) => ({
+      ...current,
+      minFret: converted.fretFocusDefaults?.min ?? current.minFret ?? DEFAULT_HIGHWAY_CONFIG.minFret,
+      maxFret: converted.fretFocusDefaults?.max ?? current.maxFret ?? DEFAULT_HIGHWAY_CONFIG.maxFret,
+    }));
     cameraEventIndexRef.current = 0;
+    fretFocusEventIndexRef.current = 0;
   }, [songMeta, importedSong]);
 
   useEffect(() => {
-    if (!isPlaying || !cameraTimeline.length) return;
+    if (!isPlaying || (!cameraTimeline.length && !fretFocusTimeline.length)) return;
     let rafId = 0;
 
     const applyDueCameraEvents = () => {
@@ -132,12 +148,24 @@ const App: React.FC = () => {
         }
         return didUpdate ? next : current;
       });
+
+      setConfig((current) => {
+        let next = current;
+        let didUpdate = false;
+        while (fretFocusEventIndexRef.current < fretFocusTimeline.length && fretFocusTimeline[fretFocusEventIndexRef.current].timeSec <= currentPlayhead) {
+          const event = fretFocusTimeline[fretFocusEventIndexRef.current];
+          next = { ...next, minFret: event.min, maxFret: event.max };
+          fretFocusEventIndexRef.current += 1;
+          didUpdate = true;
+        }
+        return didUpdate ? next : current;
+      });
       rafId = requestAnimationFrame(applyDueCameraEvents);
     };
 
     rafId = requestAnimationFrame(applyDueCameraEvents);
     return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, cameraTimeline, playheadRef]);
+  }, [isPlaying, cameraTimeline, fretFocusTimeline, playheadRef]);
 
   const handleTogglePlay = () => {
     const audio = backingTrackAudioRef.current;
@@ -166,9 +194,15 @@ const App: React.FC = () => {
     clearPendingAudioStart();
     reset();
     cameraEventIndexRef.current = 0;
-    if (cameraTimeline.length && importedSong) {
+    fretFocusEventIndexRef.current = 0;
+    if (importedSong) {
       const converted = convertTabxToEvents(importedSong);
       setCameraConfig(converted.cameraDefaults ?? DEFAULT_CAMERA_CONFIG);
+      setConfig((current) => ({
+        ...current,
+        minFret: converted.fretFocusDefaults?.min ?? DEFAULT_HIGHWAY_CONFIG.minFret,
+        maxFret: converted.fretFocusDefaults?.max ?? DEFAULT_HIGHWAY_CONFIG.maxFret,
+      }));
     }
     const audio = backingTrackAudioRef.current;
     if (audio) {

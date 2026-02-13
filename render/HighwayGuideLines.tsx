@@ -27,8 +27,10 @@ export const HighwayGuideLines: React.FC<HighwayGuideLinesProps> = ({
     const zStart = 0.03; // Small offset above hit plane to reduce z-fighting.
     const zEnd = -guideLengthZ;
 
-    return Array.from({ length: 24 }, (_, index) => {
-      const fret = index + 1;
+    const minFret = config.minFret ?? 1;
+    const maxFret = config.maxFret ?? 24;
+    return Array.from({ length: Math.max(1, maxFret - minFret + 1) }, (_, index) => {
+      const fret = index + minFret;
       const fretProbeEvent: NoteEvent = {
         id: `guide-fret-${fret}`,
         string: 1,

@@ -70,6 +70,24 @@ export interface TabxCameraTimeline {
   events?: TabxCameraEvent[];
 }
 
+
+export interface TabxFretFocusEvent {
+  at: {
+    bar: number;
+    slot: number;
+  };
+  min: number;
+  max: number;
+}
+
+export interface TabxFretFocusTimeline {
+  defaults?: {
+    min: number;
+    max: number;
+  };
+  events?: TabxFretFocusEvent[];
+}
+
 export interface TabxSection {
   name: string;
   bars: TabxBar[];
@@ -80,6 +98,7 @@ export interface TabxSong {
   meta: TabxMeta;
   sections: TabxSection[];
   camera?: TabxCameraTimeline;
+  fretFocus?: TabxFretFocusTimeline;
 }
 
 export interface ParseDiagnostic {
