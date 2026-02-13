@@ -65,6 +65,7 @@ export interface TabxCameraEvent {
 }
 
 export interface TabxCameraTimeline {
+  snapshots?: Record<string, CameraConfig>;
   defaults?: CameraConfig;
   events?: TabxCameraEvent[];
 }

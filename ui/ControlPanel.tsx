@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, Download, Eye, FastForward, Guitar, Pause, Play, RotateCcw, Save, Settings, Trash2 } from 'lucide-react';
+import { Camera, Copy, Download, Eye, FastForward, Guitar, Pause, Play, RotateCcw, Save, Settings, Trash2 } from 'lucide-react';
 import { CameraConfig, CameraSnapshot, HighwayConfig, SongMeta } from '../types';
 
 interface ControlPanelProps {
@@ -20,6 +20,41 @@ interface ControlPanelProps {
   onLockScriptedCameraChange: (locked: boolean) => void;
 }
 
+const toYamlCameraConfig = (config: CameraConfig, indent = '      '): string => {
+  const optionalLines = [
+    config.rotationEuler ? `${indent}rotationEuler: [${config.rotationEuler.join(', ')}]` : '',
+    config.damping !== undefined ? `${indent}damping: ${config.damping}` : '',
+    config.transitionMs !== undefined ? `${indent}transitionMs: ${config.transitionMs}` : '',
+  ].filter(Boolean);
+
+  return [
+    `${indent}position: [${config.position.join(', ')}]`,
+    `${indent}target: [${config.target.join(', ')}]`,
+    `${indent}fov: ${config.fov}`,
+    `${indent}near: ${config.near}`,
+    `${indent}far: ${config.far}`,
+    ...optionalLines,
+  ].join('\n');
+};
+
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'absolute';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return ok;
+  }
+};
+
 const ControlPanel: React.FC<ControlPanelProps> = ({
   isPlaying,
   onTogglePlay,
@@ -38,6 +73,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   const [snapshotName, setSnapshotName] = useState('');
   const [selectedSnapshotIndex, setSelectedSnapshotIndex] = useState(0);
+  const [clipboardMessage, setClipboardMessage] = useState<string | null>(null);
 
   const handleChange = <K extends keyof HighwayConfig>(key: K, value: HighwayConfig[K]) => onConfigChange({ ...config, [key]: value });
   const handleMeta = <K extends keyof SongMeta>(key: K, value: SongMeta[K]) => onSongMetaChange({ ...songMeta, [key]: value });
@@ -70,6 +106,33 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     const next = cameraSnapshots.filter((_, i) => i !== selectedSnapshotIndex);
     onCameraSnapshotsChange(next);
     setSelectedSnapshotIndex(Math.max(0, selectedSnapshotIndex - 1));
+  };
+
+  const copySnapshotsBlock = async () => {
+    if (!cameraSnapshots.length) {
+      setClipboardMessage('No snapshots to copy');
+      return;
+    }
+
+    const body = cameraSnapshots
+      .map((snapshot) => `    ${snapshot.name}:\n${toYamlCameraConfig(snapshot.config, '      ')}`)
+      .join('\n');
+
+    const payload = `camera:\n  snapshots:\n${body}`;
+    const ok = await copyToClipboard(payload);
+    setClipboardMessage(ok ? 'Copied snapshots YAML' : 'Clipboard unavailable');
+  };
+
+  const copySelectedSnapshotRef = async () => {
+    const selected = cameraSnapshots[selectedSnapshotIndex];
+    if (!selected) {
+      setClipboardMessage('Select a snapshot first');
+      return;
+    }
+
+    const payload = `- at: { bar: 0, slot: 0 }\n  snapshot: ${selected.name}`;
+    const ok = await copyToClipboard(payload);
+    setClipboardMessage(ok ? 'Copied event snapshot reference' : 'Clipboard unavailable');
   };
 
   return (
@@ -133,9 +196,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
         <div className="mt-3 space-y-2 text-xs">
           <input className="w-full bg-gray-800 rounded p-2" value={snapshotName} placeholder="Snapshot name" onChange={(e) => setSnapshotName(e.target.value)} />
-          <div className="flex gap-2">
-            <button onClick={saveSnapshot} className="flex-1 p-2 rounded bg-green-700 hover:bg-green-600 flex items-center justify-center gap-1"><Save size={12} /> Save Snapshot</button>
-          </div>
+          <button onClick={saveSnapshot} className="w-full p-2 rounded bg-green-700 hover:bg-green-600 flex items-center justify-center gap-1"><Save size={12} /> Save Snapshot</button>
           <select className="w-full bg-gray-800 rounded p-2" value={selectedSnapshotIndex} onChange={(e) => setSelectedSnapshotIndex(Number(e.target.value))}>
             {cameraSnapshots.map((snapshot, index) => <option key={`${snapshot.name}-${index}`} value={index}>{snapshot.name}</option>)}
           </select>
@@ -143,6 +204,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <button onClick={applySnapshot} className="p-2 rounded bg-blue-700 hover:bg-blue-600">Apply Snapshot</button>
             <button onClick={deleteSnapshot} className="p-2 rounded bg-red-700 hover:bg-red-600 flex items-center justify-center gap-1"><Trash2 size={12} /> Delete</button>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={copySnapshotsBlock} className="p-2 rounded bg-indigo-700 hover:bg-indigo-600 flex items-center justify-center gap-1"><Copy size={12} /> Copy YAML</button>
+            <button onClick={copySelectedSnapshotRef} className="p-2 rounded bg-slate-700 hover:bg-slate-600">Copy Ref</button>
+          </div>
+          {clipboardMessage && <div className="text-[11px] text-emerald-300">{clipboardMessage}</div>}
         </div>
       </div>
 

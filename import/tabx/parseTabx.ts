@@ -118,58 +118,115 @@ const parseCameraBlock = (lines: string[], startAt: number, diagnostics: ParseDi
   i += 1;
 
   const addError = (line: number, column: number, message: string) => diagnostics.push({ severity: 'error', message, line, column, contextLine: lines[line - 1] ?? '' });
-
+  const snapshots: Record<string, CameraConfig> = {};
   let defaults: CameraConfig | undefined;
   let events: TabxCameraEvent[] | undefined;
+
+  const parseSnapshotReference = (rawValue: string): CameraConfig | undefined => {
+    const snapshot = snapshots[rawValue];
+    return snapshot ? { ...snapshot } : undefined;
+  };
+
+  const parseCameraLines = (
+    lineMatcher: RegExp,
+    base: TabxCameraPartialConfig = {},
+  ): { config: TabxCameraPartialConfig; nextIndex: number } => {
+    const config: TabxCameraPartialConfig = { ...base };
+    let j = i;
+    while (j < lines.length) {
+      const contentRow = stripInlineComment(lines[j]);
+      const contentTrimmed = contentRow.trim();
+      if (!contentTrimmed) {
+        j += 1;
+        continue;
+      }
+      const fieldMatch = contentRow.match(lineMatcher);
+      if (!fieldMatch) break;
+      const [, key, rawValue] = fieldMatch;
+      if (key === 'snapshot') {
+        const referenced = parseSnapshotReference(rawValue.trim());
+        if (!referenced) {
+          addError(j + 1, 1, `Unknown camera snapshot "${rawValue.trim()}".`);
+        } else {
+          Object.assign(config, referenced);
+        }
+        j += 1;
+        continue;
+      }
+      if (!CAMERA_KEYS.has(key)) {
+        addError(j + 1, 1, `Unsupported camera key "${key}".`);
+        j += 1;
+        continue;
+      }
+      const parsed = parseCameraValue(key, rawValue.trim());
+      if (parsed === undefined) addError(j + 1, 1, `Invalid camera value for "${key}".`);
+      else (config as any)[key] = parsed;
+      j += 1;
+    }
+    return { config, nextIndex: j };
+  };
+
+  const toCameraConfig = (partial: TabxCameraPartialConfig, line: number, sectionLabel: string): CameraConfig | undefined => {
+    if (!partial.position || !partial.target || partial.fov === undefined || partial.near === undefined || partial.far === undefined) {
+      addError(line, 1, `${sectionLabel} must include position, target, fov, near, and far (directly or via snapshot).`);
+      return undefined;
+    }
+    return partial as CameraConfig;
+  };
 
   while (i < lines.length) {
     const row = stripInlineComment(lines[i]);
     const trimmed = row.trim();
-    if (!trimmed) { i += 1; continue; }
+    if (!trimmed) {
+      i += 1;
+      continue;
+    }
     if (!row.startsWith('  ')) break;
 
-    if (trimmed === 'defaults:') {
+    if (trimmed === 'snapshots:') {
       i += 1;
-      const partial: TabxCameraPartialConfig = {};
       while (i < lines.length) {
-        const defaultsRow = stripInlineComment(lines[i]);
-        const defaultsTrimmed = defaultsRow.trim();
-        if (!defaultsTrimmed) { i += 1; continue; }
-        if (!defaultsRow.startsWith('    ')) break;
-        const keyMatch = defaultsRow.match(/^\s{4}([A-Za-z][\w]*)\s*:\s*(.+)$/);
-        if (!keyMatch) { i += 1; continue; }
-        const [, key, rawValue] = keyMatch;
-        if (!CAMERA_KEYS.has(key)) {
-          addError(i + 1, 5, `Unsupported camera defaults key "${key}".`);
+        const snapshotRow = stripInlineComment(lines[i]);
+        const snapshotTrimmed = snapshotRow.trim();
+        if (!snapshotTrimmed) {
           i += 1;
           continue;
         }
-        const parsed = parseCameraValue(key, rawValue.trim());
-        if (parsed === undefined) addError(i + 1, 5, `Invalid camera defaults value for "${key}".`);
-        else (partial as any)[key] = parsed;
-        i += 1;
-      }
+        const nameMatch = snapshotRow.match(/^\s{4}([A-Za-z0-9_-]+)\s*:\s*$/);
+        if (!nameMatch) break;
 
-      if (!partial.position || !partial.target || partial.fov === undefined || partial.near === undefined || partial.far === undefined) {
-        addError(Math.max(1, i), 1, 'camera.defaults must include position, target, fov, near, and far.');
-      } else {
-        defaults = partial as CameraConfig;
+        const snapshotName = nameMatch[1];
+        i += 1;
+        const parsed = parseCameraLines(/^\s{6}([A-Za-z][\w]*)\s*:\s*(.+)$/);
+        const snapshotConfig = toCameraConfig(parsed.config, i + 1, `camera.snapshots.${snapshotName}`);
+        if (snapshotConfig) snapshots[snapshotName] = snapshotConfig;
+        i = parsed.nextIndex;
       }
+      continue;
+    }
+
+    if (trimmed === 'defaults:') {
+      i += 1;
+      const parsed = parseCameraLines(/^\s{4}([A-Za-z][\w]*)\s*:\s*(.+)$/);
+      defaults = toCameraConfig(parsed.config, i + 1, 'camera.defaults');
+      i = parsed.nextIndex;
       continue;
     }
 
     if (trimmed === 'events:') {
       i += 1;
       events = [];
-      let pending: { line: number; at?: { bar: number; slot: number }; config: TabxCameraPartialConfig } | undefined;
-      const finalizeEvent = () => {
+      type PendingEvent = { line: number; at?: { bar: number; slot: number }; config: TabxCameraPartialConfig };
+      let pending: PendingEvent | undefined;
+
+      const finalize = () => {
         if (!pending) return;
         if (!pending.at) {
           addError(pending.line, 1, 'Camera event has malformed or missing "at". Expected: at: { bar: <int>, slot: <int> }.');
         } else if (pending.at.bar < 0 || pending.at.slot < 0) {
           addError(pending.line, 1, 'Camera event "at" must use non-negative bar/slot values.');
         } else if (Object.keys(pending.config).length === 0) {
-          addError(pending.line, 1, 'Camera event must include at least one camera field.');
+          addError(pending.line, 1, 'Camera event must include at least one camera field or snapshot.');
         } else {
           events!.push({ at: pending.at, config: pending.config });
         }
@@ -179,12 +236,15 @@ const parseCameraBlock = (lines: string[], startAt: number, diagnostics: ParseDi
       while (i < lines.length) {
         const eventRow = stripInlineComment(lines[i]);
         const eventTrimmed = eventRow.trim();
-        if (!eventTrimmed) { i += 1; continue; }
+        if (!eventTrimmed) {
+          i += 1;
+          continue;
+        }
         if (!eventRow.startsWith('    ')) break;
 
         const itemMatch = eventRow.match(/^\s{4}-\s*(.*)$/);
         if (itemMatch) {
-          finalizeEvent();
+          finalize();
           pending = { line: i + 1, config: {} };
           const inline = itemMatch[1].trim();
           if (inline.startsWith('at:')) pending.at = parseAt(inline.slice(3).trim());
@@ -192,23 +252,34 @@ const parseCameraBlock = (lines: string[], startAt: number, diagnostics: ParseDi
           continue;
         }
 
-        if (!pending) { i += 1; continue; }
+        if (!pending) {
+          i += 1;
+          continue;
+        }
 
         const fieldMatch = eventRow.match(/^\s{6}([A-Za-z][\w]*)\s*:\s*(.+)$/);
-        if (!fieldMatch) { i += 1; continue; }
+        if (!fieldMatch) {
+          i += 1;
+          continue;
+        }
         const [, key, rawValue] = fieldMatch;
         if (key === 'at') {
           pending.at = parseAt(rawValue.trim());
+        } else if (key === 'snapshot') {
+          const referenced = parseSnapshotReference(rawValue.trim());
+          if (!referenced) addError(i + 1, 1, `Unknown camera snapshot "${rawValue.trim()}".`);
+          else Object.assign(pending.config, referenced);
         } else if (CAMERA_KEYS.has(key)) {
           const parsed = parseCameraValue(key, rawValue.trim());
-          if (parsed === undefined) addError(i + 1, 7, `Invalid camera event value for "${key}".`);
+          if (parsed === undefined) addError(i + 1, 1, `Invalid camera event value for "${key}".`);
           else (pending.config as any)[key] = parsed;
         } else {
-          addError(i + 1, 7, `Unsupported camera event key "${key}".`);
+          addError(i + 1, 1, `Unsupported camera event key "${key}".`);
         }
         i += 1;
       }
-      finalizeEvent();
+
+      finalize();
       if (!events.length) events = undefined;
       continue;
     }
@@ -217,7 +288,8 @@ const parseCameraBlock = (lines: string[], startAt: number, diagnostics: ParseDi
     i += 1;
   }
 
-  return { camera: defaults || events ? { defaults, events } : undefined, i };
+  const hasSnapshots = Object.keys(snapshots).length > 0;
+  return { camera: defaults || events || hasSnapshots ? { snapshots: hasSnapshots ? snapshots : undefined, defaults, events } : undefined, i };
 };
 
 const normalizeStringLabel = (label: string): string | undefined => STRING_ALIAS_MAP[label];
