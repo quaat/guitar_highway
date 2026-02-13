@@ -76,3 +76,69 @@ tempo:
   assert(out.errors.some((e) => e.message.includes('non-negative')), 'negative bar/slot should error');
   assert(out.errors.some((e) => e.message.includes('greater than 0')), 'bpm <= 0 should error');
 }
+
+{
+  const withCameraSnapshots = `TABX 2
+camera:
+  snapshots:
+    intro:
+      position: [0, 6, 8]
+      target: [0, 0, -10]
+      fov: 50
+      near: 0.1
+      far: 200
+      transitionMs: 600
+    side:
+      position: [4, 5, 10]
+      target: [0, 0, -12]
+      fov: 50
+      near: 0.1
+      far: 200
+  defaults:
+    snapshot: intro
+  events:
+    - at: { bar: 0, slot: 0 }
+      snapshot: intro
+    - at: { bar: 0, slot: 8 }
+      snapshot: side
+      transitionMs: 1200
+
+tab: A
+e|--0--0--0--0--|
+B|---------------|
+G|---------------|
+D|---------------|
+A|---------------|
+E|---------------|
+
+rhythm:
+  resolution: 16
+  bars: [16]
+`;
+
+  const out = parseTabx2Ascii(withCameraSnapshots);
+  assert(out.errors.length === 0, 'camera snapshot block should parse');
+  const converted = tabxSongToEvents(out.song!);
+  assert(!!converted.cameraDefaults, 'camera defaults should be converted');
+  assert((converted.cameraTimeline ?? []).length === 2, 'camera timeline events should convert to seconds');
+  assert((converted.cameraTimeline ?? [])[1].config.position?.[0] === 4, 'snapshot reference should resolve event position');
+}
+
+{
+  const badCameraSnapshotRef = `TABX 2
+camera:
+  defaults:
+    snapshot: does-not-exist
+
+tab: A
+e|--0--|
+B|-----|
+G|-----|
+D|-----|
+A|-----|
+E|-----|
+`;
+
+  const out = parseTabx2Ascii(badCameraSnapshotRef);
+  assert(out.errors.some((e) => e.message.includes('Unknown camera snapshot')), 'unknown camera snapshot reference should error');
+}

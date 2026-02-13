@@ -1,5 +1,18 @@
 export type PitchName = `${'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'}${'' | '#'}${number}`;
 
+export interface CameraConfig {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+  near: number;
+  far: number;
+  rotationEuler?: [number, number, number];
+  damping?: number;
+  transitionMs?: number;
+}
+
+export type TabxCameraPartialConfig = Partial<CameraConfig>;
+
 export interface TabxMeta {
   title?: string;
   artist?: string;
@@ -43,6 +56,20 @@ export interface TabxTempoEvent {
   bpm: number;
 }
 
+export interface TabxCameraEvent {
+  at: {
+    bar: number;
+    slot: number;
+  };
+  config: TabxCameraPartialConfig;
+}
+
+export interface TabxCameraTimeline {
+  snapshots?: Record<string, CameraConfig>;
+  defaults?: CameraConfig;
+  events?: TabxCameraEvent[];
+}
+
 export interface TabxSection {
   name: string;
   bars: TabxBar[];
@@ -52,6 +79,7 @@ export interface TabxSection {
 export interface TabxSong {
   meta: TabxMeta;
   sections: TabxSection[];
+  camera?: TabxCameraTimeline;
 }
 
 export interface ParseDiagnostic {
