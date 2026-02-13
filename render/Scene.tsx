@@ -2,7 +2,7 @@ import React, { Suspense, useEffect, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment } from '@react-three/drei';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Euler, PerspectiveCamera as PerspectiveCameraImpl, Quaternion, Vector3 } from 'three';
+import { Euler, MathUtils, PerspectiveCamera as PerspectiveCameraImpl, Quaternion, Vector3 } from 'three';
 import { Highway } from './Highway';
 import NoteObject from './NoteObject';
 import { CameraConfig, HighwayConfig, NoteEvent } from '../types';
@@ -16,6 +16,28 @@ interface SceneProps {
   lockScriptedCamera: boolean;
 }
 
+type CameraTransitionState = {
+  fromPos: Vector3;
+  toPos: Vector3;
+  fromTarget: Vector3;
+  toTarget: Vector3;
+  fromQuat: Quaternion;
+  toQuat: Quaternion;
+  fromFov: number;
+  toFov: number;
+  fromNear: number;
+  toNear: number;
+  fromFar: number;
+  toFar: number;
+  startTimeSec: number;
+  durationSec: number;
+};
+
+const clampTransitionSec = (transitionMs?: number): number => {
+  const requestedMs = Number.isFinite(transitionMs) ? transitionMs! : 600;
+  return MathUtils.clamp(requestedMs / 1000, 0.5, 2);
+};
+
 const CameraRig: React.FC<Pick<SceneProps, 'cameraConfig' | 'onCameraConfigChange' | 'lockScriptedCamera'>> = ({
   cameraConfig,
   onCameraConfigChange,
@@ -23,13 +45,24 @@ const CameraRig: React.FC<Pick<SceneProps, 'cameraConfig' | 'onCameraConfigChang
 }) => {
   const cameraRef = useRef<PerspectiveCameraImpl>(null);
   const controlsRef = useRef<OrbitControlsImpl>(null);
+  const scratchLookAt = useRef(new Vector3());
 
-  const fromPos = useRef(new Vector3(...cameraConfig.position));
-  const toPos = useRef(new Vector3(...cameraConfig.position));
-  const fromTarget = useRef(new Vector3(...cameraConfig.target));
-  const toTarget = useRef(new Vector3(...cameraConfig.target));
-  const transitionStartRef = useRef(performance.now());
-  const transitionDurationRef = useRef(Math.max(1, cameraConfig.transitionMs ?? 600));
+  const transitionRef = useRef<CameraTransitionState>({
+    fromPos: new Vector3(...cameraConfig.position),
+    toPos: new Vector3(...cameraConfig.position),
+    fromTarget: new Vector3(...cameraConfig.target),
+    toTarget: new Vector3(...cameraConfig.target),
+    fromQuat: new Quaternion(),
+    toQuat: new Quaternion(),
+    fromFov: cameraConfig.fov,
+    toFov: cameraConfig.fov,
+    fromNear: cameraConfig.near,
+    toNear: cameraConfig.near,
+    fromFar: cameraConfig.far,
+    toFar: cameraConfig.far,
+    startTimeSec: 0,
+    durationSec: clampTransitionSec(cameraConfig.transitionMs),
+  });
 
   const lastSentRef = useRef<CameraConfig>(cameraConfig);
 
@@ -38,23 +71,33 @@ const CameraRig: React.FC<Pick<SceneProps, 'cameraConfig' | 'onCameraConfigChang
     const controls = controlsRef.current;
     if (!camera || !controls) return;
 
-    fromPos.current.copy(camera.position);
-    fromTarget.current.copy(controls.target);
-    toPos.current.set(...cameraConfig.position);
-    toTarget.current.set(...cameraConfig.target);
-    transitionStartRef.current = performance.now();
-    transitionDurationRef.current = Math.max(1, cameraConfig.transitionMs ?? 600);
+    const transition = transitionRef.current;
+    transition.fromPos.copy(camera.position);
+    transition.fromTarget.copy(controls.target);
+    transition.toPos.set(...cameraConfig.position);
+    transition.toTarget.set(...cameraConfig.target);
 
-    camera.fov = cameraConfig.fov;
-    camera.near = cameraConfig.near;
-    camera.far = cameraConfig.far;
-
+    transition.fromQuat.copy(camera.quaternion);
     if (cameraConfig.rotationEuler) {
       const [x, y, z] = cameraConfig.rotationEuler;
-      const desiredQuaternion = new Quaternion().setFromEuler(new Euler(x, y, z, 'XYZ'));
-      camera.quaternion.slerp(desiredQuaternion, 0.2);
+      transition.toQuat.setFromEuler(new Euler(x, y, z, 'XYZ'));
+    } else {
+      scratchLookAt.current.copy(transition.toTarget);
+      camera.position.copy(transition.toPos);
+      camera.lookAt(scratchLookAt.current);
+      transition.toQuat.copy(camera.quaternion);
+      camera.position.copy(transition.fromPos);
+      camera.quaternion.copy(transition.fromQuat);
     }
-    camera.updateProjectionMatrix();
+
+    transition.fromFov = camera.fov;
+    transition.toFov = cameraConfig.fov;
+    transition.fromNear = camera.near;
+    transition.toNear = cameraConfig.near;
+    transition.fromFar = camera.far;
+    transition.toFar = cameraConfig.far;
+    transition.startTimeSec = performance.now() / 1000;
+    transition.durationSec = clampTransitionSec(cameraConfig.transitionMs);
   }, [cameraConfig]);
 
   useFrame(() => {
@@ -63,17 +106,30 @@ const CameraRig: React.FC<Pick<SceneProps, 'cameraConfig' | 'onCameraConfigChang
     if (!camera || !controls) return;
 
     if (lockScriptedCamera) {
-      const elapsed = performance.now() - transitionStartRef.current;
-      const alpha = Math.min(1, elapsed / transitionDurationRef.current);
-      camera.position.lerpVectors(fromPos.current, toPos.current, alpha);
-      controls.target.lerpVectors(fromTarget.current, toTarget.current, alpha);
       controls.enabled = false;
+
+      const transition = transitionRef.current;
+      const elapsedSec = performance.now() / 1000 - transition.startTimeSec;
+      const linearT = MathUtils.clamp(elapsedSec / Math.max(0.001, transition.durationSec), 0, 1);
+      const easedT = linearT * linearT * (3 - 2 * linearT); // smoothstep
+
+      camera.position.lerpVectors(transition.fromPos, transition.toPos, easedT);
+      controls.target.lerpVectors(transition.fromTarget, transition.toTarget, easedT);
+      camera.quaternion.slerpQuaternions(transition.fromQuat, transition.toQuat, easedT);
+
+      camera.fov = MathUtils.lerp(transition.fromFov, transition.toFov, easedT);
+      camera.near = MathUtils.lerp(transition.fromNear, transition.toNear, easedT);
+      camera.far = MathUtils.lerp(transition.fromFar, transition.toFar, easedT);
+      camera.updateProjectionMatrix();
     } else {
       controls.enabled = true;
       const nextConfig: CameraConfig = {
         ...cameraConfig,
         position: [camera.position.x, camera.position.y, camera.position.z],
         target: [controls.target.x, controls.target.y, controls.target.z],
+        fov: camera.fov,
+        near: camera.near,
+        far: camera.far,
       };
       const prev = lastSentRef.current;
       const drift =
@@ -82,7 +138,9 @@ const CameraRig: React.FC<Pick<SceneProps, 'cameraConfig' | 'onCameraConfigChang
         Math.abs(prev.position[2] - nextConfig.position[2]) +
         Math.abs(prev.target[0] - nextConfig.target[0]) +
         Math.abs(prev.target[1] - nextConfig.target[1]) +
-        Math.abs(prev.target[2] - nextConfig.target[2]);
+        Math.abs(prev.target[2] - nextConfig.target[2]) +
+        Math.abs(prev.fov - nextConfig.fov);
+
       if (drift > 0.001) {
         lastSentRef.current = nextConfig;
         onCameraConfigChange(nextConfig);
@@ -96,7 +154,14 @@ const CameraRig: React.FC<Pick<SceneProps, 'cameraConfig' | 'onCameraConfigChang
 
   return (
     <>
-      <PerspectiveCamera ref={cameraRef} makeDefault position={cameraConfig.position} fov={cameraConfig.fov} near={cameraConfig.near} far={cameraConfig.far} />
+      <PerspectiveCamera
+        ref={cameraRef}
+        makeDefault
+        position={cameraConfig.position}
+        fov={cameraConfig.fov}
+        near={cameraConfig.near}
+        far={cameraConfig.far}
+      />
       <OrbitControls ref={controlsRef} target={cameraConfig.target} minPolarAngle={0} maxPolarAngle={Math.PI / 2} />
     </>
   );

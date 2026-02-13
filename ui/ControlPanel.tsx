@@ -174,7 +174,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <input className="bg-gray-800 rounded p-2" type="number" step="0.1" value={cameraConfig.fov} onChange={(e) => updateCameraField('fov', Number(e.target.value))} placeholder="FOV" />
           <input className="bg-gray-800 rounded p-2" type="number" step="0.1" value={cameraConfig.near} onChange={(e) => updateCameraField('near', Number(e.target.value))} placeholder="Near" />
           <input className="bg-gray-800 rounded p-2" type="number" step="1" value={cameraConfig.far} onChange={(e) => updateCameraField('far', Number(e.target.value))} placeholder="Far" />
-          <input className="bg-gray-800 rounded p-2" type="number" step="10" value={cameraConfig.transitionMs ?? 600} onChange={(e) => updateCameraField('transitionMs', Number(e.target.value))} placeholder="Transition ms" />
+          <input className="bg-gray-800 rounded p-2" type="number" min={500} max={2000} step="50" value={cameraConfig.transitionMs ?? 600} onChange={(e) => updateCameraField('transitionMs', Number(e.target.value))} placeholder="Transition ms" />
         </div>
         {(['position', 'target', 'rotationEuler'] as const).map((vecKey) => (
           <div key={vecKey} className="mt-2">
