@@ -2,7 +2,6 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { HighwayConfig, NoteEvent, STRING_COLORS_MAP } from '../types';
 import { Line, Text } from '@react-three/drei';
-import * as THREE from 'three';
 import { HighwayGuideLines } from './HighwayGuideLines';
 import { worldPositionForEvent } from '../domain/mapping';
 
@@ -144,15 +143,23 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
 
   return (
     <group>
-      <mesh position={[0, 0, -viewDistance / 2]}>
-        <boxGeometry args={[width, height, viewDistance]} />
-        <meshStandardMaterial color="#0b1120" roughness={0.28} metalness={0.35} emissive="#111827" emissiveIntensity={0.2} side={THREE.DoubleSide} />
+      <mesh position={[0, -height / 2 + 0.002, -viewDistance / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[width, viewDistance]} />
+        <meshStandardMaterial color="#0b1120" roughness={0.28} metalness={0.35} emissive="#111827" emissiveIntensity={0.2} />
       </mesh>
 
-      <mesh position={[0, 0, 0.01]}>
-        <planeGeometry args={[width, height]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.12} metalness={0.5} emissive="#0ea5e9" emissiveIntensity={0.06} transparent opacity={0.35} />
-      </mesh>
+      <group>
+        {Array.from({ length: fretCount }).map((_, laneIndex) => {
+          const fret = laneIndex + minFret;
+          const pos = worldPositionForEvent({ id: `floor-tile-${fret}`, string: 1, fret, time: 0 }, 0, config);
+          return (
+            <mesh key={`floor-tile-${fret}`} position={[pos.x, -height / 2 + 0.004, -viewDistance / 2]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[fretSpacing * 0.95, viewDistance]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.12} metalness={0.5} emissive="#0ea5e9" emissiveIntensity={0.06} transparent opacity={0.28} />
+            </mesh>
+          );
+        })}
+      </group>
 
       {fretLines}
       {stringLines}
