@@ -40,25 +40,54 @@ export interface ConvertedSong {
   notes: NoteEvent[];
   totalBars: number;
   totalNotes: number;
+  tempoMap?: Array<{ timeSec: number; bpm: number }>;
 }
 
 export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
   const notes: NoteEvent[] = [];
-  const { bpm, timeSig, tuning, capo, resolution } = song.meta;
-  const beatDurationSec = 60 / bpm;
-  const barDurationSec = beatDurationSec * timeSig.num * (4 / timeSig.den);
+  const { bpm: defaultBpm, timeSig, tuning, capo, resolution } = song.meta;
+  const tempoMap: Array<{ timeSec: number; bpm: number }> = [];
+  const quartersPerBar = timeSig.num * (4 / timeSig.den);
+
   let sectionStartSec = 0;
   let idCounter = 0;
 
   song.sections.forEach((section) => {
+    const slotTimes = new Map<string, number>();
+    const tempoByPosition = new Map<string, number>();
+    (section.tempoEvents ?? []).forEach((event) => {
+      tempoByPosition.set(`${event.at.bar}:${event.at.slot}`, event.bpm);
+    });
+
+    let currentBpm = defaultBpm;
+    let elapsedInSectionSec = 0;
+
+    if (tempoByPosition.has('0:0')) {
+      currentBpm = tempoByPosition.get('0:0')!;
+    }
+    tempoMap.push({ timeSec: sectionStartSec, bpm: currentBpm });
+
     section.bars.forEach((bar, barIdx) => {
-      const barStartSec = sectionStartSec + barIdx * barDurationSec;
-      const barResolution = bar.rhythmResolution ?? resolution;
-      const slotDurationSec = barDurationSec / Math.max(1, barResolution);
+      const barResolution = Math.max(1, bar.rhythmResolution ?? resolution);
+      const slotDurationForBpm = (activeBpm: number) => (60 / activeBpm) * (quartersPerBar / barResolution);
+
+      for (let slot = 0; slot < barResolution; slot += 1) {
+        const key = `${barIdx}:${slot}`;
+        if (tempoByPosition.has(key)) {
+          const nextBpm = tempoByPosition.get(key)!;
+          if (nextBpm !== currentBpm || tempoMap.length === 0) {
+            currentBpm = nextBpm;
+            tempoMap.push({ timeSec: sectionStartSec + elapsedInSectionSec, bpm: currentBpm });
+          }
+        }
+        slotTimes.set(key, sectionStartSec + elapsedInSectionSec);
+        elapsedInSectionSec += slotDurationForBpm(currentBpm);
+      }
 
       bar.events.forEach((event) => {
         const slot = event.slot ?? Math.round((event.col / Math.max(1, resolution - 1)) * Math.max(0, barResolution - 1));
-        const time = barStartSec + slot * slotDurationSec;
+        const boundedSlot = Math.max(0, Math.min(barResolution - 1, slot));
+        const time = slotTimes.get(`${barIdx}:${boundedSlot}`) ?? sectionStartSec + elapsedInSectionSec;
         const string = 6 - event.stringIndex;
         notes.push({
           id: `tabx-${idCounter++}`,
@@ -72,7 +101,8 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
         } as NoteEvent & { midi: number });
       });
     });
-    sectionStartSec += section.bars.length * barDurationSec;
+
+    sectionStartSec += elapsedInSectionSec;
   });
 
   notes.sort((a, b) => a.time - b.time);
@@ -81,6 +111,7 @@ export const tabxSongToEvents = (song: TabxSong): ConvertedSong => {
     notes,
     totalBars: song.sections.reduce((sum, section) => sum + section.bars.length, 0),
     totalNotes: notes.length,
+    tempoMap,
   };
 };
 
