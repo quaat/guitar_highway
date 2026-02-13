@@ -35,9 +35,18 @@ export interface TabxBar {
   rhythmResolution?: number;
 }
 
+export interface TabxTempoEvent {
+  at: {
+    bar: number;
+    slot: number;
+  };
+  bpm: number;
+}
+
 export interface TabxSection {
   name: string;
   bars: TabxBar[];
+  tempoEvents?: TabxTempoEvent[];
 }
 
 export interface TabxSong {

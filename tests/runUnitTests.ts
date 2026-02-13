@@ -148,6 +148,38 @@ rhythm:
   assertEqual(out.song!.sections[0].bars[1].rhythmResolution, 16, 'bar 2 rhythm resolution from list');
 });
 
+test('parseTabx2Ascii parses tempo blocks and validates malformed values', () => {
+  const source = `TABX 2
+tab: A
+e|--0--|
+B|-----|
+G|-----|
+D|-----|
+A|-----|
+E|-----|
+rhythm:
+  resolution: 16
+  bars: [16]
+tempo:
+  - at: { bar: 0, slot: 0 }
+    bpm: 120
+  - at: { bar: 0, slot: 20 }
+    bpm: 90
+  - at: { bar: -1, slot: 0 }
+    bpm: 90
+  - at: { bar: 0, slot: 0 }
+    bpm: 0
+  - at: nope
+    bpm: 100
+`;
+  const out = parseTabx2Ascii(source);
+  assert(out.song === undefined, 'invalid tempo entries should fail parse');
+  assert(out.errors.some((e) => e.message.includes('out of range for bar 0')), 'slot range validation');
+  assert(out.errors.some((e) => e.message.includes('non-negative')), 'negative location validation');
+  assert(out.errors.some((e) => e.message.includes('greater than 0')), 'bpm validation');
+  assert(out.errors.some((e) => e.message.includes('malformed or missing "at"')), 'malformed at validation');
+});
+
 test('parseTabx2Ascii errors when any string line is missing', () => {
   const source = `TABX 2
 tab: A
@@ -243,6 +275,80 @@ test('convertTabxToEvents aliases tabxSongToEvents', () => {
   const b = convertTabxToEvents(parsed.song!);
   assertEqual(a.totalNotes, b.totalNotes, 'alias should return same note count');
   assertEqual(a.totalBars, b.totalBars, 'alias should return same bar count');
+});
+
+test('tabxSongToEvents applies section tempo changes, including mid-bar slot changes', () => {
+  const song: TabxSong = {
+    meta: {
+      bpm: 120,
+      playbackDelayMs: 0,
+      timeSig: { num: 4, den: 4 },
+      tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'],
+      capo: 0,
+      resolution: 16,
+    },
+    sections: [
+      {
+        name: 'Tempo',
+        bars: [
+          {
+            index: 1,
+            rhythmResolution: 16,
+            events: [
+              { stringIndex: 0, col: 0, fret: 0, slot: 0 },
+              { stringIndex: 0, col: 0, fret: 2, slot: 8 },
+              { stringIndex: 0, col: 0, fret: 3, slot: 12 },
+            ],
+          },
+        ],
+        tempoEvents: [
+          { at: { bar: 0, slot: 8 }, bpm: 60 },
+        ],
+      },
+    ],
+  };
+
+  const converted = tabxSongToEvents(song);
+  assertEqual(converted.notes.length, 3, 'expected three notes');
+  assertClose(converted.notes[0].time, 0, 1e-9, 'first note at section start');
+  assertClose(converted.notes[1].time, 1, 1e-9, 'note at slot 8 before change duration sum');
+  assertClose(converted.notes[2].time, 2, 1e-9, 'note after mid-bar tempo change should be delayed');
+  assert(converted.tempoMap && converted.tempoMap.length >= 2, 'tempo map should expose changes');
+  assertClose(converted.tempoMap![1].timeSec, 1, 1e-9, 'tempo change should occur at slot boundary time');
+  assertEqual(converted.tempoMap![1].bpm, 60, 'tempo map bpm value');
+});
+
+test('tabxSongToEvents uses last tempo event when multiple changes share same position', () => {
+  const song: TabxSong = {
+    meta: {
+      bpm: 120,
+      playbackDelayMs: 0,
+      timeSig: { num: 4, den: 4 },
+      tuning: ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'],
+      capo: 0,
+      resolution: 16,
+    },
+    sections: [
+      {
+        name: 'SamePoint',
+        bars: [
+          {
+            index: 1,
+            rhythmResolution: 16,
+            events: [{ stringIndex: 0, col: 0, fret: 0, slot: 8 }],
+          },
+        ],
+        tempoEvents: [
+          { at: { bar: 0, slot: 0 }, bpm: 140 },
+          { at: { bar: 0, slot: 0 }, bpm: 100 },
+        ],
+      },
+    ],
+  };
+
+  const converted = tabxSongToEvents(song);
+  assertClose(converted.notes[0].time, 1.2, 1e-9, 'last tempo event should define active bpm at same position');
+  assertEqual(converted.tempoMap?.[0].bpm, 100, 'tempo map should start at winning bpm');
 });
 
 test('worldPositionForEvent computes centered x/y and depth z', () => {

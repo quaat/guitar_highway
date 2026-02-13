@@ -1,4 +1,15 @@
-import { ParseDiagnostic, ParseError, PitchName, TabxBar, TabxMeta, TabxNoteCell, TabxSection, TabxSong, TabxTechnique } from './types';
+import {
+  ParseDiagnostic,
+  ParseError,
+  PitchName,
+  TabxBar,
+  TabxMeta,
+  TabxNoteCell,
+  TabxSection,
+  TabxSong,
+  TabxTechnique,
+  TabxTempoEvent,
+} from './types';
 
 const DEFAULT_META: TabxMeta = {
   bpm: 120,
@@ -194,6 +205,12 @@ const assignSlots = (
   return events.map((event) => ({ ...event, slot: colToSlot.get(event.col) ?? 0 }));
 };
 
+const parseTempoAt = (value: string): { bar: number; slot: number } | undefined => {
+  const match = value.match(/^\{\s*bar:\s*(-?\d+)\s*,\s*slot:\s*(-?\d+)\s*\}$/);
+  if (!match) return undefined;
+  return { bar: Number(match[1]), slot: Number(match[2]) };
+};
+
 export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: ParseDiagnostic[]; errors: ParseError[] } => {
   const lines = text.split(/\r?\n/);
   const diagnostics: ParseDiagnostic[] = [];
@@ -285,7 +302,7 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
           i += 1;
           continue;
         }
-        if (/^\s*(tab:|meta:|rhythm:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
+        if (/^\s*(tab:|meta:|rhythm:|tempo:)/.test(trimmed) && !trimmed.startsWith('bars:')) break;
         const resolutionMatch = row.match(/^\s*resolution:\s*(\d+)\s*$/);
         if (resolutionMatch) {
           rhythmResolution = Number(resolutionMatch[1]);
@@ -326,7 +343,100 @@ export const parseTabx2Ascii = (text: string): { song?: TabxSong; diagnostics: P
       addWarning(sourceStartLine + 1, 1, `Section "${name}" has no rhythm block. Timing is approximated from note-column groups and can sound uneven; add an explicit rhythm: block for deterministic eighth/16th-note timing.`);
     }
 
-    sections.push({ name, bars });
+    let tempoEvents: TabxTempoEvent[] | undefined;
+    while (i < lines.length && isEmptyOrComment(lines[i])) i += 1;
+    if (i < lines.length && stripInlineComment(lines[i]).trim() === 'tempo:') {
+      i += 1;
+      tempoEvents = [];
+      type PendingTempo = {
+        at?: { bar: number; slot: number };
+        bpm?: number;
+        line: number;
+        column: number;
+      };
+      let pending: PendingTempo | undefined;
+
+      const finalizePending = () => {
+        if (!pending) return;
+        if (!pending.at) {
+          addError(pending.line, pending.column, 'Tempo event has malformed or missing "at". Expected: at: { bar: <int>, slot: <int> }.');
+          pending = undefined;
+          return;
+        }
+        if (pending.at.bar < 0 || pending.at.slot < 0) {
+          addError(pending.line, pending.column, 'Tempo event "at" must use non-negative bar/slot values.');
+          pending = undefined;
+          return;
+        }
+        if (pending.at.bar >= bars.length) {
+          addError(pending.line, pending.column, `Tempo event bar index ${pending.at.bar} is out of range for section "${name}" (${bars.length} bars).`);
+          pending = undefined;
+          return;
+        }
+        const barResolution = Math.max(1, bars[pending.at.bar].rhythmResolution ?? meta.resolution);
+        if (pending.at.slot >= barResolution) {
+          addError(
+            pending.line,
+            pending.column,
+            `Tempo event slot ${pending.at.slot} is out of range for bar ${pending.at.bar} (resolution ${barResolution}).`,
+          );
+          pending = undefined;
+          return;
+        }
+        if (pending.bpm === undefined || pending.bpm <= 0) {
+          addError(pending.line, pending.column, 'Tempo event bpm must be a number greater than 0.');
+          pending = undefined;
+          return;
+        }
+        tempoEvents!.push({ at: pending.at, bpm: pending.bpm });
+        pending = undefined;
+      };
+
+      while (i < lines.length) {
+        const row = stripInlineComment(lines[i]);
+        const trimmed = row.trim();
+        if (!trimmed) {
+          i += 1;
+          continue;
+        }
+        if (/^\s*(tab:|meta:|rhythm:|tempo:)/.test(trimmed)) break;
+
+        const itemMatch = row.match(/^\s*-\s*(.*)$/);
+        if (itemMatch) {
+          finalizePending();
+          pending = { line: i + 1, column: 1 };
+          const inline = itemMatch[1].trim();
+          if (inline.startsWith('at:')) {
+            pending.at = parseTempoAt(inline.slice(3).trim());
+          } else if (inline.startsWith('bpm:')) {
+            pending.bpm = Number(inline.slice(4).trim());
+          }
+          i += 1;
+          continue;
+        }
+
+        const atMatch = row.match(/^\s*at:\s*(.+)$/);
+        if (atMatch && pending) {
+          pending.at = parseTempoAt(atMatch[1].trim());
+          i += 1;
+          continue;
+        }
+
+        const bpmMatch = row.match(/^\s*bpm:\s*(.+)$/);
+        if (bpmMatch && pending) {
+          pending.bpm = Number(bpmMatch[1].trim());
+          i += 1;
+          continue;
+        }
+
+        i += 1;
+      }
+
+      finalizePending();
+      if (!tempoEvents.length) tempoEvents = undefined;
+    }
+
+    sections.push({ name, bars, tempoEvents });
   }
 
   if (!sections.length) {
