@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Scene from './render/Scene';
 import ControlPanel from './ui/ControlPanel';
 import { usePlayback } from './state/usePlayback';
-import { DEFAULT_CAMERA_CONFIG, DEFAULT_HIGHWAY_CONFIG } from './constants';
+import { DEFAULT_CAMERA_CONFIG, DEFAULT_HIGHWAY_CONFIG, DEFAULT_VISUAL_SETTINGS } from './constants';
 import { generateDemoSong } from './domain/generator';
-import { CameraConfig, CameraSnapshot, HighwayConfig, NoteEvent, SongMeta } from './types';
+import { CameraConfig, CameraSnapshot, HighwayConfig, NoteEvent, SongMeta, VisualSettings } from './types';
 import ImportTabxModal from './ui/ImportTabxModal';
 import { TabxSong } from './import/tabx/types';
 import { ConvertedSong, convertTabxToEvents } from './import/tabx/convertTabx';
@@ -48,6 +48,7 @@ const App: React.FC = () => {
   const [importedSong, setImportedSong] = useState<TabxSong | null>(null);
   const [cameraTimeline, setCameraTimeline] = useState<Array<{ timeSec: number; config: Partial<CameraConfig> }>>([]);
   const [fretFocusTimeline, setFretFocusTimeline] = useState<Array<{ timeSec: number; min: number; max: number }>>([]);
+  const [visuals, setVisuals] = useState<VisualSettings>(DEFAULT_VISUAL_SETTINGS);
 
   const { isPlaying, playheadRef, togglePlay, reset, resetToken } = usePlayback();
   const [notes, setNotes] = useState<NoteEvent[]>(() => generateDemoSong());
@@ -223,6 +224,8 @@ const App: React.FC = () => {
           cameraConfig={cameraConfig}
           onCameraConfigChange={setCameraConfig}
           lockScriptedCamera={lockScriptedCamera}
+          visuals={visuals}
+          bpm={songMeta.bpm}
         />
       </div>
 
@@ -247,6 +250,8 @@ const App: React.FC = () => {
         onCameraSnapshotsChange={setCameraSnapshots}
         lockScriptedCamera={lockScriptedCamera}
         onLockScriptedCameraChange={setLockScriptedCamera}
+        visuals={visuals}
+        onVisualsChange={setVisuals}
       />
 
       <ImportTabxModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onImport={handleImport} />

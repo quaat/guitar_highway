@@ -52,6 +52,17 @@ export interface CameraSnapshot {
   config: CameraConfig;
 }
 
+export interface VisualSettings {
+  visualQuality: 'low' | 'medium' | 'high';
+  enableHighwayEffects: boolean;
+  enableNoteEffects: boolean;
+  enableParticles: boolean;
+  enableBackground: boolean;
+  enablePostProcessing: boolean;
+  enableCameraMotion: boolean;
+  enableTempoReactiveLights: boolean;
+}
+
 export const STRING_COLORS = [
   '#ef4444', // 1: Red (Low E - wait, usually 6 is Low E in tabs, but Rocksmith flips visual)
              // Let's stick to standard Rocksmith-like:

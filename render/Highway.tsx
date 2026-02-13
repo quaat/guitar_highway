@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { HighwayConfig, NoteEvent, STRING_COLORS_MAP } from '../types';
 import { Line, Text } from '@react-three/drei';
@@ -8,9 +8,6 @@ import { worldPositionForEvent } from '../domain/mapping';
 
 const INLAY_FRETS = [3, 5, 7, 9, 12, 15, 17, 19, 21, 24];
 const DOUBLE_INLAYS = [12, 24];
-
-const GRID_OPACITY = 0.18;
-const FRET_THICKNESS = 0.09;
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
@@ -49,7 +46,7 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
           points={[[x, -height / 2, 0], [x, height / 2, 0], [x, height / 2, -viewDistance], [x, -height / 2, -viewDistance], [x, -height / 2, 0]]}
           color="#5f636b"
           lineWidth={1.5}
-          opacity={GRID_OPACITY}
+          opacity={0.18}
           transparent
           depthWrite={false}
         />
@@ -64,8 +61,8 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
 
       return (
         <mesh key={`fret-overlay-${fretBoundary}`} position={[x, 0, 0.04]} renderOrder={5}>
-          <planeGeometry args={[FRET_THICKNESS, height]} />
-          <meshBasicMaterial color="#e2e8f0" transparent opacity={0.85} depthWrite={false} />
+          <planeGeometry args={[0.09, height]} />
+          <meshBasicMaterial color="#e2e8f0" transparent opacity={0.8} depthWrite={false} />
         </mesh>
       );
     })
@@ -79,10 +76,8 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
 
       return (
         <React.Fragment key={`string-line-${s}`}>
-          <Line points={[[-width / 2, y, 0], [width / 2, y, 0]]} color={color} lineWidth={3.5} opacity={0.8} transparent depthWrite={false} />
-          <Line points={[[-width / 2, y, -viewDistance], [width / 2, y, -viewDistance]]} color={color} lineWidth={2} opacity={0.2} transparent depthWrite={false} />
-          <Line points={[[-width / 2, y, 0], [-width / 2, y, -viewDistance]]} color={color} lineWidth={1} opacity={0.08} transparent depthWrite={false} />
-          <Line points={[[width / 2, y, 0], [width / 2, y, -viewDistance]]} color={color} lineWidth={1} opacity={0.08} transparent depthWrite={false} />
+          <Line points={[[-width / 2, y, 0], [width / 2, y, 0]]} color={color} lineWidth={3.5} opacity={0.85} transparent depthWrite={false} />
+          <Line points={[[-width / 2, y, -viewDistance], [width / 2, y, -viewDistance]]} color={color} lineWidth={2} opacity={0.24} transparent depthWrite={false} />
         </React.Fragment>
       );
     })
@@ -124,22 +119,15 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
       const stringIndex = note.string - 1;
       const laneIndex = note.fret - minFret;
 
-      if (stringIndex >= 0 && stringIndex < closestByString.length) {
-        closestByString[stringIndex] = Math.min(closestByString[stringIndex], distanceToHit);
-      }
-
-      if (laneIndex >= 0 && laneIndex < closestByLane.length) {
-        closestByLane[laneIndex] = Math.min(closestByLane[laneIndex], distanceToHit);
-      }
+      if (stringIndex >= 0 && stringIndex < closestByString.length) closestByString[stringIndex] = Math.min(closestByString[stringIndex], distanceToHit);
+      if (laneIndex >= 0 && laneIndex < closestByLane.length) closestByLane[laneIndex] = Math.min(closestByLane[laneIndex], distanceToHit);
     }
 
     for (let i = 0; i < 6; i += 1) {
       const mat = stringGlowMaterialRefs.current[i];
       if (!mat) continue;
-
       const proximity = Number.isFinite(closestByString[i]) ? clamp01(1 - (closestByString[i] / stringGlowDistance)) : 0;
       const intensity = proximity * maxStringGlowIntensity;
-
       mat.opacity = 0.03 + intensity * 0.75;
       mat.color.set(STRING_COLORS_MAP[i + 1]).multiplyScalar(1 + intensity * 0.65);
     }
@@ -147,27 +135,23 @@ export const Highway: React.FC<HighwayProps> = ({ config, notes, playheadRef }) 
     for (let i = 0; i < fretCount; i += 1) {
       const mat = laneGlowMaterialRefs.current[i];
       if (!mat) continue;
-
       const proximity = Number.isFinite(closestByLane[i]) ? clamp01(1 - (closestByLane[i] / laneGlowDistance)) : 0;
       const intensity = proximity * maxLaneGlowIntensity;
-
       mat.opacity = 0.015 + intensity * 0.5;
       mat.color.set('#cbd5e1').multiplyScalar(1 + intensity * 0.7);
     }
   });
 
-  useEffect(() => {
-    console.debug('[Highway] Extents', {
-      highwayBox: { min: { x: -width / 2, y: -height / 2, z: -viewDistance }, max: { x: width / 2, y: height / 2, z: 0 } },
-      laneGuides: { min: { x: -width / 2, y: -height / 2, z: -viewDistance }, max: { x: width / 2, y: -height / 2, z: 0.03 } },
-    });
-  }, [height, viewDistance, width]);
-
   return (
     <group>
       <mesh position={[0, 0, -viewDistance / 2]}>
         <boxGeometry args={[width, height, viewDistance]} />
-        <meshBasicMaterial color="#0f0f12" transparent opacity={0} side={THREE.DoubleSide} depthWrite={false} />
+        <meshStandardMaterial color="#0b1120" roughness={0.28} metalness={0.35} emissive="#111827" emissiveIntensity={0.2} side={THREE.DoubleSide} />
+      </mesh>
+
+      <mesh position={[0, 0, 0.01]}>
+        <planeGeometry args={[width, height]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.12} metalness={0.5} emissive="#0ea5e9" emissiveIntensity={0.06} transparent opacity={0.35} />
       </mesh>
 
       {fretLines}
