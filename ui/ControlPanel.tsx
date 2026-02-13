@@ -93,13 +93,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const updateCameraField = <K extends keyof CameraConfig>(key: K, value: CameraConfig[K]) => onCameraConfigChange({ ...cameraConfig, [key]: value });
 
-  const updateVectorField = (key: 'position' | 'target' | 'rotationEuler', idx: number, value: number) => {
-    const source = cameraConfig[key] ?? [0, 0, 0];
-    const next: [number, number, number] = [...source] as [number, number, number];
-    next[idx] = value;
-    updateCameraField(key, next as CameraConfig[typeof key]);
-  };
-
   const saveSnapshot = () => {
     const name = snapshotName.trim() || `Snapshot ${cameraSnapshots.length + 1}`;
     onCameraSnapshotsChange([...cameraSnapshots, { name, config: cameraConfig }]);
@@ -171,16 +164,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <input className="bg-slate-900/90 rounded-lg p-2" type="number" min={500} max={2000} step="50" value={cameraConfig.transitionMs ?? 600} onChange={(e) => updateCameraField('transitionMs', Number(e.target.value))} placeholder="Transition ms" />
         </div>
 
-        {(['position', 'target', 'rotationEuler'] as const).map((vecKey) => (
-          <div key={vecKey} className="mt-2">
-            <div className="text-xs text-gray-300 mb-1">{vecKey}</div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              {[0, 1, 2].map((idx) => (
-                <input key={`${vecKey}-${idx}`} className="bg-slate-900/90 rounded-lg p-2" type="number" step="0.1" value={(cameraConfig[vecKey] ?? [0, 0, 0])[idx]} onChange={(e) => updateVectorField(vecKey, idx, Number(e.target.value))} />
-              ))}
-            </div>
-          </div>
-        ))}
+
 
         <div className="mt-3 space-y-2 text-xs">
           <input className="w-full bg-slate-900/90 rounded-lg p-2" value={snapshotName} placeholder="Snapshot name" onChange={(e) => setSnapshotName(e.target.value)} />
