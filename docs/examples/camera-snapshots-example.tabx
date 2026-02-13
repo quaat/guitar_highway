@@ -1,0 +1,62 @@
+TABX 2
+
+meta:
+  title: Camera Snapshot Demo
+  artist: Guitar Highway
+  bpm: 120
+  time: 4/4
+  tuning: E2 A2 D3 G3 B3 E4
+  capo: 0
+  resolution: 16
+
+camera:
+  snapshots:
+    default:
+      position: [0, 6, 8]
+      target: [0, 0, -10]
+      fov: 50
+      near: 0.1
+      far: 200
+      transitionMs: 600
+    side:
+      position: [4, 5, 10]
+      target: [0, 0, -12]
+      fov: 50
+      near: 0.1
+      far: 200
+      transitionMs: 1000
+    top:
+      position: [0, 10, 2]
+      target: [0, 0, -12]
+      fov: 45
+      near: 0.1
+      far: 200
+      transitionMs: 1000
+
+  defaults:
+    snapshot: default
+
+  events:
+    # Switch #1 at start of bar 2
+    - at: { bar: 1, slot: 0 }
+      snapshot: side
+
+    # Switch #2 at start of bar 3
+    - at: { bar: 2, slot: 0 }
+      snapshot: top
+
+tab: Verse
+e|--0---0---0---0---|--2---2---2---2---|--3---3---3---3---|--0---0---0---0---|
+B|-------------------|-------------------|-------------------|-------------------|
+G|-------------------|-------------------|-------------------|-------------------|
+D|-------------------|-------------------|-------------------|-------------------|
+A|-------------------|-------------------|-------------------|-------------------|
+E|-------------------|-------------------|-------------------|-------------------|
+
+rhythm:
+  resolution: 16
+  bars: [16, 16, 16, 16]
+
+tempo:
+  - at: { bar: 0, slot: 0 }
+    bpm: 120
