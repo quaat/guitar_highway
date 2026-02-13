@@ -11,6 +11,8 @@ export const DEFAULT_HIGHWAY_CONFIG: HighwayConfig = {
   laneGlowDistance: 18,
   maxStringGlowIntensity: 0.95,
   maxLaneGlowIntensity: 0.7,
+  minFret: 1,
+  maxFret: 24,
 };
 
 export const DEFAULT_CAMERA_CONFIG: CameraConfig = {

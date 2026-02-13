@@ -360,11 +360,24 @@ test('worldPositionForEvent computes centered x/y and depth z', () => {
   assertClose(pos.z, -30, 1e-9, 'future note should be negative z');
 });
 
+test('worldPositionForEvent centers x around configured fret range', () => {
+  const event = { id: 'n', fret: 13, string: 3, time: 5 };
+  const config = { fretSpacing: 1, stringSpacing: 1, speed: 10, viewDistance: 50, laneWidth: 1, laneHeight: 1, minFret: 10, maxFret: 17 };
+  const pos = worldPositionForEvent(event, 5, config);
+  assertClose(pos.x, -0.5, 1e-9, 'fret center should track custom range midpoint');
+});
+
 test('isVisible respects near and far depth limits', () => {
   const config = { fretSpacing: 1, stringSpacing: 1, speed: 20, viewDistance: 100, laneWidth: 1, laneHeight: 1 };
   assertEqual(isVisible({ id: 'a', fret: 1, string: 1, time: 0 }, 0, config), true, 'at playhead is visible');
   assertEqual(isVisible({ id: 'b', fret: 1, string: 1, time: -1 }, 0, config), false, 'far in the past not visible');
   assertEqual(isVisible({ id: 'c', fret: 1, string: 1, time: 20 }, 0, config), false, 'far in the future not visible');
+});
+
+test('isVisible hides notes outside configured fret range', () => {
+  const config = { fretSpacing: 1, stringSpacing: 1, speed: 20, viewDistance: 100, laneWidth: 1, laneHeight: 1, minFret: 5, maxFret: 12 };
+  assertEqual(isVisible({ id: 'a', fret: 3, string: 1, time: 0 }, 0, config), false, 'below min fret should be hidden');
+  assertEqual(isVisible({ id: 'b', fret: 13, string: 1, time: 0 }, 0, config), false, 'above max fret should be hidden');
 });
 
 test('generateDemoSong produces valid event ranges and unique ids', () => {
