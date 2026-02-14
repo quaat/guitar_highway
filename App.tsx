@@ -143,9 +143,11 @@ const App: React.FC = () => {
         let didUpdate = false;
         while (cameraEventIndexRef.current < cameraTimeline.length && cameraTimeline[cameraEventIndexRef.current].timeSec <= currentPlayhead) {
           const event = cameraTimeline[cameraEventIndexRef.current];
-          next = { ...next, ...event.config };
+          if (lockScriptedCamera) {
+            next = { ...next, ...event.config };
+            didUpdate = true;
+          }
           cameraEventIndexRef.current += 1;
-          didUpdate = true;
         }
         return didUpdate ? next : current;
       });
@@ -166,7 +168,7 @@ const App: React.FC = () => {
 
     rafId = requestAnimationFrame(applyDueCameraEvents);
     return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, cameraTimeline, fretFocusTimeline, playheadRef]);
+  }, [isPlaying, cameraTimeline, fretFocusTimeline, lockScriptedCamera, playheadRef]);
 
   const handleTogglePlay = () => {
     const audio = backingTrackAudioRef.current;
