@@ -3,7 +3,7 @@ import { isVisible, worldPositionForEvent } from '../domain/mapping';
 import { convertTabxToEvents, midiFromStringFret, pitchNameToMidi, tabxSongToEvents } from '../import/tabx/convertTabx';
 import { parseTabx, parseTabx2Ascii } from '../import/tabx/parseTabx';
 import { TabxSong } from '../import/tabx/types';
-import { formatDuration, parseSongLibraryPayload } from '../services/songLibrary';
+import { formatDuration, parseSongLibraryPayload, toProxyAwareUrl } from '../services/songLibrary';
 
 type TestCase = { name: string; run: () => void };
 
@@ -410,6 +410,20 @@ test('parseSongLibraryPayload keeps valid rows and skips invalid entries', () =>
   assertEqual(result.songs.length, 2, 'two valid songs should remain');
   assertEqual(result.skipped, 2, 'two invalid rows should be skipped');
 });
+
+test('toProxyAwareUrl rewrites localhost library URLs in dev', () => {
+  assertEqual(
+    toProxyAwareUrl('http://localhost:8000/songs.json', 'http://localhost:3000'),
+    '/library-proxy/songs.json',
+    'local library URL should use dev proxy',
+  );
+  assertEqual(
+    toProxyAwareUrl('http://localhost:3000/songs.json', 'http://localhost:3000'),
+    'http://localhost:3000/songs.json',
+    'same-origin URL should be unchanged',
+  );
+});
+
 
 
 

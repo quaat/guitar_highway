@@ -4,6 +4,7 @@ import { TabxSong } from '../import/tabx/types';
 
 export const DEFAULT_LIBRARY_URL = 'http://localhost:8000/songs.json';
 const DEFAULT_TUNING = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'] as const;
+const DEV_LIBRARY_ORIGINS = new Set(['http://localhost:8000', 'http://127.0.0.1:8000']);
 
 export interface SongLibraryEntry {
   id: string;
@@ -29,13 +30,35 @@ export const formatDuration = (durationSec?: number | null): string => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
+const getRuntimeOrigin = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  return window.location.origin;
+};
+
+export const toProxyAwareUrl = (rawUrl: string, appOrigin = getRuntimeOrigin()): string => {
+  if (!appOrigin) return rawUrl;
+
+  try {
+    const parsed = new URL(rawUrl, appOrigin);
+    const isLocalClient = appOrigin.includes('localhost') || appOrigin.includes('127.0.0.1');
+    if (!isLocalClient || !DEV_LIBRARY_ORIGINS.has(parsed.origin) || parsed.origin === appOrigin) return parsed.toString();
+    return `/library-proxy${parsed.pathname}${parsed.search}`;
+  } catch {
+    return rawUrl;
+  }
+};
+
 const asNonEmptyString = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-export const parseSongLibraryPayload = (payload: unknown): ParsedLibraryResult => {
+const applyProxyToOptionalUrl = (value: string | undefined, appOrigin?: string): string | undefined => (
+  value ? toProxyAwareUrl(value, appOrigin) : undefined
+);
+
+export const parseSongLibraryPayload = (payload: unknown, appOrigin = getRuntimeOrigin()): ParsedLibraryResult => {
   if (!Array.isArray(payload)) return { songs: [], skipped: 0 };
 
   let skipped = 0;
@@ -56,23 +79,23 @@ export const parseSongLibraryPayload = (payload: unknown): ParsedLibraryResult =
     return [{
       id: `${title}-${index}`,
       title,
-      audio,
+      audio: toProxyAwareUrl(audio, appOrigin),
       artist: asNonEmptyString(row.artist),
       tuning: asNonEmptyString(row.tuning),
       year: asNonEmptyString(row.year),
-      cover: asNonEmptyString(row.cover),
-      notes: asNonEmptyString(row.notes),
+      cover: applyProxyToOptionalUrl(asNonEmptyString(row.cover), appOrigin),
+      notes: applyProxyToOptionalUrl(asNonEmptyString(row.notes), appOrigin),
     } satisfies SongLibraryEntry];
   });
 
   return { songs, skipped };
 };
 
-export const fetchSongLibrary = async (url: string, fetcher: typeof fetch = fetch): Promise<ParsedLibraryResult> => {
-  const response = await fetcher(url);
+export const fetchSongLibrary = async (url: string, fetcher: typeof fetch = fetch, appOrigin = getRuntimeOrigin()): Promise<ParsedLibraryResult> => {
+  const response = await fetcher(toProxyAwareUrl(url, appOrigin));
   if (!response.ok) throw new Error(`Could not load song library (${response.status})`);
   const json = await response.json();
-  return parseSongLibraryPayload(json);
+  return parseSongLibraryPayload(json, appOrigin);
 };
 
 const buildFallbackSong = (entry: SongLibraryEntry): TabxSong => ({
@@ -90,13 +113,13 @@ const buildFallbackSong = (entry: SongLibraryEntry): TabxSong => ({
   sections: [],
 });
 
-export const loadLibrarySong = async (entry: SongLibraryEntry, fetcher: typeof fetch = fetch): Promise<{ song: TabxSong; converted: ConvertedSong }> => {
+export const loadLibrarySong = async (entry: SongLibraryEntry, fetcher: typeof fetch = fetch, appOrigin = getRuntimeOrigin()): Promise<{ song: TabxSong; converted: ConvertedSong }> => {
   if (!entry.notes) {
     const fallbackSong = buildFallbackSong(entry);
     return { song: fallbackSong, converted: convertTabxToEvents(fallbackSong) };
   }
 
-  const response = await fetcher(entry.notes);
+  const response = await fetcher(toProxyAwareUrl(entry.notes, appOrigin));
   if (!response.ok) throw new Error(`Could not load notes (${response.status})`);
   const text = await response.text();
 
