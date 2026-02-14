@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Group, Mesh, MeshStandardMaterial, MathUtils } from 'three';
+import { Group, Mesh, MeshStandardMaterial } from 'three';
 import { NoteEvent, HighwayConfig, STRING_COLORS_MAP } from '../types';
 import { worldPositionForEvent } from '../domain/mapping';
 
@@ -146,12 +146,6 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
           <meshStandardMaterial ref={beadMaterialRef} color={color} roughness={0.24} metalness={0.28} emissive={color} emissiveIntensity={noteEffectsEnabled ? 0.28 : 0} />
         </mesh>
 
-        {(note.duration ?? 0) > 0.2 && noteEffectsEnabled && (
-          <mesh position={[0, 0, -MathUtils.clamp(sustainLength * 0.4, 0.2, 2.2)]}>
-            <cylinderGeometry args={[0.04, 0.04, Math.max(0.6, sustainLength * 0.8), 8]} />
-            <meshBasicMaterial color={color} transparent opacity={0.32} depthWrite={false} />
-          </mesh>
-        )}
 
         <mesh ref={rodRef} position={[0, -0.5, 0]}>
           <boxGeometry args={[Math.max(0.035, config.fretSpacing * 0.045), 1, Math.max(0.03, depth * 0.08)]} />
