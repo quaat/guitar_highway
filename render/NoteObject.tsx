@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Group, Mesh, MeshStandardMaterial } from 'three';
+import { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial } from 'three';
 import { NoteEvent, HighwayConfig, STRING_COLORS_MAP } from '../types';
 import { worldPositionForEvent } from '../domain/mapping';
 
@@ -27,6 +27,8 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
   const beadMaterialRef = useRef<MeshStandardMaterial>(null);
   const previewMeshRef = useRef<Mesh>(null);
   const previewMaterialRef = useRef<MeshStandardMaterial>(null);
+  const previewBorderMeshRef = useRef<Mesh>(null);
+  const previewBorderMaterialRef = useRef<MeshBasicMaterial>(null);
   const rodRef = useRef<Mesh>(null);
   const trailRef = useRef<Mesh>(null);
   const prevDeltaRef = useRef(note.time - playheadRef.current);
@@ -36,6 +38,7 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
   const width = config.fretSpacing * 0.8;
   const height = config.stringSpacing * 0.6;
   const depth = 0.5;
+  const previewThickness = Math.max(0.02, config.stringSpacing * 0.07);
   const sustainLength = Math.max(0, (note.duration ?? 0) * config.speed);
   const impactPosition = useMemo(() => worldPositionForEvent(note, note.time, config), [note, config]);
 
@@ -47,6 +50,9 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
 
     if (previewMeshRef.current) {
       previewMeshRef.current.position.set(impactPosition.x, impactPosition.y, PREVIEW_Z);
+    }
+    if (previewBorderMeshRef.current) {
+      previewBorderMeshRef.current.position.set(impactPosition.x, impactPosition.y, PREVIEW_Z - 0.001);
     }
 
     const elapsed = playheadRef.current - note.time;
@@ -122,6 +128,11 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
 
       previewMaterialRef.current.opacity = previewOpacity;
       previewMeshRef.current.visible = previewVisible;
+
+      if (previewBorderMeshRef.current && previewBorderMaterialRef.current) {
+        previewBorderMaterialRef.current.opacity = previewOpacity * 0.95;
+        previewBorderMeshRef.current.visible = previewVisible;
+      }
     }
   });
 
@@ -146,15 +157,19 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
           <meshStandardMaterial ref={beadMaterialRef} color={color} roughness={0.24} metalness={0.28} emissive={color} emissiveIntensity={noteEffectsEnabled ? 0.28 : 0} />
         </mesh>
 
-
         <mesh ref={rodRef} position={[0, -0.5, 0]}>
           <boxGeometry args={[Math.max(0.035, config.fretSpacing * 0.045), 1, Math.max(0.03, depth * 0.08)]} />
           <meshStandardMaterial color={color} transparent opacity={0.5} roughness={0.6} metalness={0.05} />
         </mesh>
       </group>
 
+      <mesh ref={previewBorderMeshRef}>
+        <boxGeometry args={[width * 1.08, height * 1.08, previewThickness]} />
+        <meshBasicMaterial ref={previewBorderMaterialRef} color="#ffffff" transparent opacity={0} depthWrite={false} />
+      </mesh>
+
       <mesh ref={previewMeshRef}>
-        <boxGeometry args={[width, height, depth]} />
+        <boxGeometry args={[width, height, previewThickness * 0.72]} />
         <meshStandardMaterial ref={previewMaterialRef} color={color} roughness={0.6} metalness={0} transparent={true} opacity={0} />
       </mesh>
     </>
