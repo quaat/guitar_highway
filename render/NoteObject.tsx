@@ -94,9 +94,10 @@ const NoteObject: React.FC<NoteObjectProps> = ({ note, playheadRef, config, note
 
     if (rodRef.current) {
       const highwaySurfaceY = -(config.stringSpacing * 6) / 2;
-      const rodHeight = Math.max(0.01, targetPos.y - highwaySurfaceY);
+      const noteBottomY = targetPos.y - height * 0.5;
+      const rodHeight = Math.max(0.01, noteBottomY - highwaySurfaceY);
       rodRef.current.scale.y = rodHeight;
-      rodRef.current.position.y = -rodHeight * 0.5;
+      rodRef.current.position.y = -height * 0.5 - rodHeight * 0.5;
       rodRef.current.visible = beadVisible;
     }
 

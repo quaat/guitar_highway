@@ -7,7 +7,6 @@ import { Highway } from './Highway';
 import NoteObject from './NoteObject';
 import { CameraConfig, HighwayConfig, NoteEvent, VisualSettings } from '../types';
 import BackgroundScene from './effects/BackgroundScene';
-import HighwayEffects from './effects/HighwayEffects';
 import Particles from './effects/Particles';
 import PostProcessing from './effects/PostProcessing';
 import NoteEffects from './effects/NoteEffects';
@@ -233,13 +232,6 @@ const Scene: React.FC<SceneProps> = ({ notes, playheadRef, config, cameraConfig,
         <fog attach="fog" args={['#0b1020', 8, config.viewDistance + 28]} />
         <color attach="background" args={['#090b15']} />
         <Highway config={config} notes={notes} playheadRef={playheadRef} />
-        <HighwayEffects
-          config={config}
-          enabled={visuals.enableHighwayEffects}
-          hitPulseRef={hitPulseRef}
-          comboEnergyRef={comboEnergyRef}
-          quality={visuals.visualQuality}
-        />
         <NoteEffects enabled={visuals.enableNoteEffects} hitPulseRef={hitPulseRef} comboEnergyRef={comboEnergyRef} />
         <Particles enabled={visuals.enableParticles} quality={visuals.visualQuality} hitPulseRef={hitPulseRef} comboEnergyRef={comboEnergyRef} />
         <group>
