@@ -11,10 +11,12 @@ interface HighwayEffectsProps {
   quality: 'low' | 'medium' | 'high';
 }
 
+const EDGE_STRIP_WIDTH = 0.09;
+
 const HighwayEffects: React.FC<HighwayEffectsProps> = ({ config, enabled, hitPulseRef, comboEnergyRef, quality }) => {
   const streakRefs = useRef<Array<MeshBasicMaterial | null>>([]);
   const markerRefs = useRef<Array<MeshBasicMaterial | null>>([]);
-  const laneFlashRef = useRef<MeshBasicMaterial>(null);
+  const edgeFlashRefs = useRef<Array<MeshBasicMaterial | null>>([]);
 
   const minFret = config.minFret ?? 1;
   const maxFret = config.maxFret ?? 24;
@@ -46,9 +48,10 @@ const HighwayEffects: React.FC<HighwayEffectsProps> = ({ config, enabled, hitPul
       mat.color.copy(new Color('#22d3ee')).lerp(new Color('#f472b6'), comboEnergyRef.current * 0.65);
     });
 
-    if (laneFlashRef.current) {
-      laneFlashRef.current.opacity = hitPulseRef.current * 0.22 + comboEnergyRef.current * 0.06;
-    }
+    edgeFlashRefs.current.forEach((mat) => {
+      if (!mat) return;
+      mat.opacity = hitPulseRef.current * 0.22 + comboEnergyRef.current * 0.06;
+    });
   });
 
   if (!enabled) return null;
@@ -58,42 +61,90 @@ const HighwayEffects: React.FC<HighwayEffectsProps> = ({ config, enabled, hitPul
       {Array.from({ length: streakCount }).map((_, idx) => {
         const zOffset = -(idx / streakCount) * config.viewDistance;
         return (
-          <mesh key={`highway-streak-${idx}`} position={[0, -height / 2 + 0.015, zOffset]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[width, config.viewDistance / streakCount]} />
-            <meshBasicMaterial
-              ref={(mat) => {
-                streakRefs.current[idx] = mat;
-              }}
-              color="#60a5fa"
-              transparent
-              opacity={0.08}
-              depthWrite={false}
-            />
-          </mesh>
+          <React.Fragment key={`highway-streak-${idx}`}>
+            <mesh position={[-width / 2 + EDGE_STRIP_WIDTH * 0.5, -height / 2 + 0.015, zOffset]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[EDGE_STRIP_WIDTH, config.viewDistance / streakCount]} />
+              <meshBasicMaterial
+                ref={(mat) => {
+                  streakRefs.current[idx * 2] = mat;
+                }}
+                color="#60a5fa"
+                transparent
+                opacity={0.08}
+                depthWrite={false}
+              />
+            </mesh>
+            <mesh position={[width / 2 - EDGE_STRIP_WIDTH * 0.5, -height / 2 + 0.015, zOffset]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[EDGE_STRIP_WIDTH, config.viewDistance / streakCount]} />
+              <meshBasicMaterial
+                ref={(mat) => {
+                  streakRefs.current[idx * 2 + 1] = mat;
+                }}
+                color="#60a5fa"
+                transparent
+                opacity={0.08}
+                depthWrite={false}
+              />
+            </mesh>
+          </React.Fragment>
         );
       })}
 
       {fretMarkers.map((fret, idx) => {
         const x = (fret - (minFret + maxFret) / 2) * config.fretSpacing;
         return (
-          <mesh key={`fret-marker-glow-${fret}`} position={[x, 0, 0.05]}>
-            <planeGeometry args={[0.15, height * 0.95]} />
-            <meshBasicMaterial
-              ref={(mat) => {
-                markerRefs.current[idx] = mat;
-              }}
-              color="#22d3ee"
-              transparent
-              opacity={0.15}
-              depthWrite={false}
-            />
-          </mesh>
+          <React.Fragment key={`fret-marker-glow-${fret}`}>
+            <mesh position={[x, -height / 2 + 0.02, 0.05]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[config.fretSpacing * 0.7, EDGE_STRIP_WIDTH]} />
+              <meshBasicMaterial
+                ref={(mat) => {
+                  markerRefs.current[idx * 2] = mat;
+                }}
+                color="#22d3ee"
+                transparent
+                opacity={0.15}
+                depthWrite={false}
+              />
+            </mesh>
+            <mesh position={[x, height / 2 - 0.02, 0.05]} rotation={[-Math.PI / 2, 0, 0]}>
+              <planeGeometry args={[config.fretSpacing * 0.7, EDGE_STRIP_WIDTH]} />
+              <meshBasicMaterial
+                ref={(mat) => {
+                  markerRefs.current[idx * 2 + 1] = mat;
+                }}
+                color="#22d3ee"
+                transparent
+                opacity={0.15}
+                depthWrite={false}
+              />
+            </mesh>
+          </React.Fragment>
         );
       })}
 
-      <mesh position={[0, 0, 0.06]}>
-        <planeGeometry args={[width, height]} />
-        <meshBasicMaterial ref={laneFlashRef} color="#f8fafc" transparent opacity={0} depthWrite={false} />
+      <mesh position={[-width / 2 + EDGE_STRIP_WIDTH * 0.5, -height / 2 + 0.016, 0.06]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[EDGE_STRIP_WIDTH, config.viewDistance]} />
+        <meshBasicMaterial
+          ref={(mat) => {
+            edgeFlashRefs.current[0] = mat;
+          }}
+          color="#f8fafc"
+          transparent
+          opacity={0}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh position={[width / 2 - EDGE_STRIP_WIDTH * 0.5, -height / 2 + 0.016, 0.06]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[EDGE_STRIP_WIDTH, config.viewDistance]} />
+        <meshBasicMaterial
+          ref={(mat) => {
+            edgeFlashRefs.current[1] = mat;
+          }}
+          color="#f8fafc"
+          transparent
+          opacity={0}
+          depthWrite={false}
+        />
       </mesh>
     </group>
   );
