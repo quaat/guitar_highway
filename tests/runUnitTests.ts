@@ -3,6 +3,7 @@ import { isVisible, worldPositionForEvent } from '../domain/mapping';
 import { convertTabxToEvents, midiFromStringFret, pitchNameToMidi, tabxSongToEvents } from '../import/tabx/convertTabx';
 import { parseTabx, parseTabx2Ascii } from '../import/tabx/parseTabx';
 import { TabxSong } from '../import/tabx/types';
+import { formatDuration, parseSongLibraryPayload } from '../services/songLibrary';
 
 type TestCase = { name: string; run: () => void };
 
@@ -389,6 +390,28 @@ test('generateDemoSong produces valid event ranges and unique ids', () => {
   const uniqueIds = new Set(song.map((n) => n.id));
   assertEqual(uniqueIds.size, song.length, 'all generated ids should be unique');
 });
+
+
+
+test('formatDuration returns friendly strings for valid and invalid durations', () => {
+  assertEqual(formatDuration(125), '2:05', 'valid duration should be formatted');
+  assertEqual(formatDuration(0), '–:––', 'zero duration should fallback');
+  assertEqual(formatDuration(null), '–:––', 'null duration should fallback');
+});
+
+test('parseSongLibraryPayload keeps valid rows and skips invalid entries', () => {
+  const payload = [
+    { title: 'Song A', audio: 'http://localhost/a.m4a', artist: 'Artist' },
+    { title: 'Missing audio' },
+    null,
+    { title: 'Song B', audio: 'http://localhost/b.m4a', notes: 'http://localhost/b.tabx' },
+  ];
+  const result = parseSongLibraryPayload(payload);
+  assertEqual(result.songs.length, 2, 'two valid songs should remain');
+  assertEqual(result.skipped, 2, 'two invalid rows should be skipped');
+});
+
+
 
 let failures = 0;
 for (const t of tests) {

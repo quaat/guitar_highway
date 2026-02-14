@@ -10,6 +10,8 @@ import { TabxSong } from './import/tabx/types';
 import { ConvertedSong, convertTabxToEvents } from './import/tabx/convertTabx';
 import { WebAudioOutputDevice } from './audio/outputDevice';
 import { useNoteScheduler } from './state/useNoteScheduler';
+import SongCollectionMenu from './ui/SongCollectionMenu';
+import { loadLibrarySong, SongLibraryEntry } from './services/songLibrary';
 
 const DEFAULT_META: SongMeta = {
   title: 'Demo Song',
@@ -44,6 +46,7 @@ const App: React.FC = () => {
   const [cameraSnapshots, setCameraSnapshots] = useState<CameraSnapshot[]>([]);
   const [lockScriptedCamera, setLockScriptedCamera] = useState(true);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isSongCollectionOpen, setIsSongCollectionOpen] = useState(true);
   const [songMeta, setSongMeta] = useState<SongMeta>(DEFAULT_META);
   const [importedSong, setImportedSong] = useState<TabxSong | null>(null);
   const [cameraTimeline, setCameraTimeline] = useState<Array<{ timeSec: number; config: Partial<CameraConfig> }>>([]);
@@ -114,6 +117,12 @@ const App: React.FC = () => {
     cameraEventIndexRef.current = 0;
     fretFocusEventIndexRef.current = 0;
     reset();
+    setIsSongCollectionOpen(false);
+  };
+
+  const handleLibrarySongSelection = async (entry: SongLibraryEntry) => {
+    const { song, converted } = await loadLibrarySong(entry);
+    handleImport(song, converted);
   };
 
   useEffect(() => {
@@ -244,6 +253,7 @@ const App: React.FC = () => {
         onConfigChange={setConfig}
         playheadTime={0}
         onOpenImport={() => setIsImportOpen(true)}
+        onOpenSongCollection={() => setIsSongCollectionOpen(true)}
         songMeta={songMeta}
         onSongMetaChange={setSongMeta}
         cameraConfig={cameraConfig}
@@ -254,6 +264,13 @@ const App: React.FC = () => {
         onLockScriptedCameraChange={setLockScriptedCamera}
         visuals={visuals}
         onVisualsChange={setVisuals}
+      />
+
+      <SongCollectionMenu
+        isVisible={isSongCollectionOpen}
+        onSelectSong={handleLibrarySongSelection}
+        onOpenManualImport={() => setIsImportOpen(true)}
+        onClose={() => setIsSongCollectionOpen(false)}
       />
 
       <ImportTabxModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onImport={handleImport} />
