@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, Copy, Download, Eye, FastForward, Guitar, Pause, Play, RotateCcw, Save, Settings, Sparkles, Trash2 } from 'lucide-react';
+import { Camera, Copy, Download, Eye, FastForward, Guitar, ListMusic, Pause, Play, RotateCcw, Save, Settings, Sparkles, Trash2 } from 'lucide-react';
 import { CameraConfig, CameraSnapshot, HighwayConfig, SongMeta, VisualSettings } from '../types';
 
 interface ControlPanelProps {
@@ -10,6 +10,7 @@ interface ControlPanelProps {
   onConfigChange: (newConfig: HighwayConfig) => void;
   playheadTime: number;
   onOpenImport: () => void;
+  onOpenSongCollection: () => void;
   songMeta: SongMeta;
   onSongMetaChange: (meta: SongMeta) => void;
   cameraConfig: CameraConfig;
@@ -66,6 +67,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   config,
   onConfigChange,
   onOpenImport,
+  onOpenSongCollection,
   songMeta,
   onSongMetaChange,
   cameraConfig,
@@ -140,10 +142,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     <div className="absolute top-4 left-4 z-20 w-[350px] max-h-[92vh] overflow-y-auto pr-1 space-y-3">
       <div className={panelClass}>
         <div className="flex items-center gap-2 text-cyan-200 mb-3 text-sm uppercase tracking-widest"><Sparkles size={14} /> Performance</div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <button onClick={onTogglePlay} className="p-2 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/40 border border-cyan-400/25 flex items-center justify-center gap-1">{isPlaying ? <Pause size={14} /> : <Play size={14} />}{isPlaying ? 'Pause' : 'Play'}</button>
           <button onClick={onReset} className="p-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/25 flex items-center justify-center gap-1"><RotateCcw size={14} />Reset</button>
           <button onClick={onOpenImport} className="p-2 rounded-lg bg-violet-500/20 hover:bg-violet-500/35 border border-violet-400/25 flex items-center justify-center gap-1"><Download size={14} />Import</button>
+          <button onClick={onOpenSongCollection} className="p-2 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/25 flex items-center justify-center gap-1"><ListMusic size={14} />Library</button>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
