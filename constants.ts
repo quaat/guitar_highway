@@ -1,4 +1,4 @@
-import { HighwayConfig, CameraConfig } from './types';
+import { HighwayConfig, CameraConfig, VisualSettings } from './types';
 
 export const DEFAULT_HIGHWAY_CONFIG: HighwayConfig = {
   fretSpacing: 1.2,
@@ -23,4 +23,15 @@ export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
   target: [0, 0, -10],
   damping: 0.1,
   transitionMs: 600,
+};
+
+export const DEFAULT_VISUAL_SETTINGS: VisualSettings = {
+  visualQuality: 'medium',
+  enableHighwayEffects: true,
+  enableNoteEffects: true,
+  enableParticles: true,
+  enableBackground: true,
+  enablePostProcessing: true,
+  enableCameraMotion: true,
+  enableTempoReactiveLights: true,
 };
